@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, Image, Alert, Pressable } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ScreenContainer } from '../../components/ScreenContainer';
+import { AuthLayout, FormAlert } from '../../components/AuthLayout';
 import { TextField } from '../../components/TextField';
 import { Button } from '../../components/Button';
-import { StmMexaLogo } from '../../components/StmMexaLogo';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useAuthStore } from '../../store/authStore';
 import { RootStackParamList } from '../../navigation/types';
@@ -24,77 +23,69 @@ export function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
+  const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
     const errors: typeof fieldErrors = {};
-    if (!email.trim()) errors.email = 'Email is required';
-    else if (!isValidEmail(email.trim())) errors.email = 'Enter a valid email address';
-    if (!password) errors.password = 'Password is required';
+    if (!email.trim()) errors.email = 'Enter your email address.';
+    else if (!isValidEmail(email.trim())) errors.email = 'That is not a valid email address.';
+    if (!password) errors.password = 'Enter your password.';
 
     setFieldErrors(errors);
+    setFormError(null);
     if (Object.keys(errors).length > 0) return;
 
     setSubmitting(true);
     try {
       await signIn(email.trim(), password);
     } catch (e: any) {
-      Alert.alert('Sign in failed', e?.response?.data?.message ?? 'Please check your credentials and try again.');
+      /* In place, not a pop-up: an Alert says nothing on the web preview and
+         takes the words away as soon as it is dismissed. */
+      const status = e?.response?.status;
+      setFormError(
+        e?.response?.data?.message ??
+        (status ? 'Sign in failed. Check your email and password and try again.'
+                : 'Cannot reach the server. Check the connection and try again.')
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <ScreenContainer scroll>
-      <View style={{ flex: 1, justifyContent: 'center' }}>
-        <View style={{ alignItems: 'center', marginBottom: theme.spacing.xxl }}>
-          <View style={{ marginBottom: theme.spacing.lg }}>
-            <StmMexaLogo width={168} dark={theme.isDark} />
-          </View>
-          <Text style={{ fontSize: theme.type.body, color: theme.colors.textSecondary, marginTop: theme.spacing.xs }}>
-            Sign in to your account
-          </Text>
-        </View>
-
-        <TextField
-          label="Email"
-          placeholder="you@company.com"
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="email-address"
-          textContentType="emailAddress"
-          value={email}
-          onChangeText={setEmail}
-          error={fieldErrors.email}
-          returnKeyType="next"
-        />
-
-        <TextField
-          label="Password"
-          placeholder="••••••••"
-          secureTextEntry
-          secureToggle
-          textContentType="password"
-          value={password}
-          onChangeText={setPassword}
-          error={fieldErrors.password}
-          returnKeyType="done"
-          onSubmitEditing={handleSubmit}
-        />
-
-        <Pressable
-          onPress={() => navigation.navigate('ForgotPassword')}
-          hitSlop={8}
-          style={{ alignSelf: 'flex-end', marginTop: -theme.spacing.md, marginBottom: theme.spacing.lg }}
-        >
-          <Text style={{ color: theme.colors.accent, fontSize: theme.type.caption, fontWeight: theme.weight.semibold as any }}>
-            Forgot password?
-          </Text>
-        </Pressable>
-
-        <Button label="Sign In" onPress={handleSubmit} loading={submitting} />
-      </View>
-    </ScreenContainer>
+    <AuthLayout title="Sign in" subtitle="Use the account your company admin created for you.">
+      {formError ? <FormAlert text={formError} /> : null}
+      <TextField
+        label="Email"
+        value={email}
+        onChangeText={setEmail}
+        error={fieldErrors.email}
+        placeholder="you@company.com"
+        autoCapitalize="none"
+        autoComplete="email"
+        keyboardType="email-address"
+        textContentType="username"
+        returnKeyType="next"
+      />
+      <TextField
+        label="Password"
+        value={password}
+        onChangeText={setPassword}
+        error={fieldErrors.password}
+        placeholder="Your password"
+        secureTextEntry
+        secureToggle
+        autoComplete="password"
+        textContentType="password"
+        returnKeyType="go"
+        onSubmitEditing={handleSubmit}
+      />
+      <Pressable onPress={() => navigation.navigate('ForgotPassword')} accessibilityRole="link" hitSlop={8}
+        style={{ alignSelf: 'flex-end', marginTop: -theme.spacing.sm, marginBottom: theme.spacing.xl, minHeight: 32, justifyContent: 'center' }}>
+        <Text style={{ color: theme.colors.accent, fontWeight: theme.weight.bold as any, fontSize: 14 }}>Forgot password?</Text>
+      </Pressable>
+      <Button label="Sign in" icon="log-in-outline" onPress={handleSubmit} loading={submitting} />
+    </AuthLayout>
   );
 }

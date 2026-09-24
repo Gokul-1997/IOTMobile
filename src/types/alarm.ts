@@ -3,8 +3,11 @@
 // PATCH /:id/resolve. Distinct from `notifications` (types/notification.ts):
 // alarms are the machine-alert record with a resolve workflow; notifications
 // are the broader per-user inbox (which an alarm also posts into).
-export type AlarmType = 'ALARM' | 'OFFLINE' | 'LOW_PERFORMANCE';
-export type AlarmSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+/* alarm_type is the controller's alarm name ("AIR PRESSURE LOW"), and the
+   controllers report severity as CRITICAL or NORMAL — not the LOW / MEDIUM /
+   HIGH set this file used to assume, which put "Low" on every alarm. */
+export type AlarmType = string;
+export type AlarmSeverity = string;
 
 export interface MachineAlarm {
   id: number;
@@ -20,6 +23,9 @@ export interface MachineAlarm {
   resolved_at: string | null;
   resolution_note: string | null;
   started_at: string;
+  /** when the controller cleared it; null while it is still active */
+  ended_at: string | null;
+  alarm_code: string | null;
   created_at: string;
 }
 

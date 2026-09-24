@@ -38,17 +38,8 @@ export function RootNavigator() {
         {status === 'signedIn' ? (
           <>
             <Stack.Screen name="Main" component={MainTabs} />
-            <Stack.Screen
-              name="MachineDetail"
-              component={MachineDetailScreen}
-              options={{
-                headerShown: true,
-                headerStyle: { backgroundColor: theme.colors.surface },
-                headerTintColor: theme.colors.textPrimary,
-                headerTitleStyle: { color: theme.colors.textPrimary },
-                headerShadowVisible: false,
-              }}
-            />
+            {/* the machine screen draws its own brand header, with a back button */}
+            <Stack.Screen name="MachineDetail" component={MachineDetailScreen} options={{ animation: 'slide_from_right' }} />
           </>
         ) : (
           <>

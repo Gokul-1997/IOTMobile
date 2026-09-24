@@ -60,6 +60,12 @@ async function buildSocket(): Promise<Socket> {
   return s;
 }
 
+/**
+ * Resolves once connected; rejects if the socket cannot connect (websocket
+ * blocked, server restarting). Screens call it without waiting on it —
+ * see connectSocketQuietly — because the REST poll is the floor and live
+ * updates only sit on top of it.
+ */
 export async function connectSocket(): Promise<void> {
   if (socket?.connected) return;
   if (connecting) return connecting;
@@ -106,4 +112,15 @@ export function disconnectSocket(): void {
   socket.disconnect();
   socket = null;
   joinedPlantId = null;
+}
+
+/** Connect without letting a failure escape: a socket that cannot connect
+ *  used to surface as an unhandled "websocket error" in the screen. */
+export async function connectSocketQuietly(): Promise<boolean> {
+  try {
+    await connectSocket();
+    return true;
+  } catch {
+    return false;
+  }
 }

@@ -4,6 +4,9 @@ import { AlarmsResponse } from '../types/alarm';
 export interface GetAlarmsParams {
   machine_id?: number;
   is_resolved?: boolean;
+  /** true: the controller has not cleared it yet */
+  active?: boolean;
+  severity?: 'CRITICAL' | 'NORMAL';
   page?: number;
   limit?: number;
 }

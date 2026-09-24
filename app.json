@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "MEXA Monitor",
+    "name": "STM MEXA",
     "slug": "mexa-monitor",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,7 +14,7 @@
     "android": {
       "package": "com.dharstec.mexamonitor",
       "adaptiveIcon": {
-        "backgroundColor": "#1F5E8C",
+        "backgroundColor": "#2B3990",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -30,11 +30,11 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
-          "imageWidth": 160,
+          "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#1F5E8C",
+          "backgroundColor": "#2B3990",
           "dark": {
-            "backgroundColor": "#10161D"
+            "backgroundColor": "#1A2257"
           }
         }
       ],
@@ -43,7 +43,7 @@
       [
         "expo-notifications",
         {
-          "color": "#1F5E8C"
+          "color": "#2B3990"
         }
       ]
     ],

@@ -1,47 +1,36 @@
-// Brand tokens — pulled directly from FrontendIOT's actual source of truth:
-// the "STM MEXA" logo gradient (public/images/logo/STM_Mexa_logo.svg) and
-// styles.scss (.bg-top-bar, .nav-btn). Navy -> wine -> red is the real STM
-// Mexa identity; the mobile app previously used an unrelated generic blue.
+/*
+ * STM MEXA — mobile colours, taken from the web app so the two read as one
+ * product:
+ *
+ *  - brand: the logo's navy → wine gradient, as the web's .bg-top-bar draws
+ *    it (#2B3990 → #9B3F70); the logo's red tail is kept for the wordmark only.
+ *  - neutrals: the MEXA dashboard tokens (_mexa.scss): ground #eef0f5,
+ *    card #fff, ink #1f2430 / #4b5262 / #5d6679, rule #e3e6ef.
+ *  - machine status: the same four colours the web uses everywhere — the
+ *    status chips, the machine list, the shift timeline — Running green,
+ *    Idle amber, Alarm red, Offline grey. Each has a darker ink for text on
+ *    its own light tint (4.5:1 or better) so a status never relies on a dot.
+ */
 export const palette = {
-  navy900: '#102B4E', // "STM" wordmark — darkest anchor
-  navy700: '#2B3990', // gradient start / .nav-btn default / header start
-  wine600: '#863567', // .nav-btn:hover/.active
-  wine500: '#9B3F70', // header gradient end
-  red500: '#EF4136', // gradient tail — used sparingly (danger territory), not as a UI color
+  navy900: '#102B4E',
+  navy700: '#2B3990',
+  navy600: '#223070',
+  wine600: '#863567',
+  wine500: '#9B3F70',
+  red500: '#EF4136',
 
-  brand50: '#eef0fa',
-  brand100: '#d6d9f0',
-  brand500: '#2B3990', // = navy700, the mobile app's primary accent
-  brand600: '#223070',
-  brand700: '#1a2456',
+  // the web top bar, and a deepened version for dark mode (the brand stays
+  // recognisable instead of going flat black)
+  headerGradient: ['#2B3990', '#9B3F70'] as const,
+  headerGradientDark: ['#1A2257', '#4A2138'] as const,
 
-  // The full logo gradient, for hero surfaces only (header, ring) — never for
-  // text or small UI (a 3-stop gradient on body text or icons reads as noisy).
+  // the full logo gradient — hero surfaces only
   brandGradient: ['#2B3990', '#843D67', '#EF4136'] as const,
 
-  // Dark-mode hero: same navy -> wine -> red identity, darkened and
-  // desaturated for an OLED-dark surface instead of flattened to flat
-  // black. Flat black was the original approach (see DashboardScreen git
-  // history) and reads as broken/generic — this keeps the brand gradient
-  // legible without the light-mode version's brightness.
-  brandGradientDark: ['#141C30', '#241A2C', '#1B1014'] as const,
-
-  ink900: '#182430',
-  ink700: '#333f4b',
-  ink500: '#46586a',
-  ink300: '#7b8b9a',
-  ink100: '#d5dde4',
-  ink50: '#f6f8fa',
-
-  // Validated pair (scripts/validate_palette.js, dataviz skill): passes the
-  // normal-vision floor; CVD separation lands in the 6-8 WARN band, which is
-  // acceptable because every status is also spelled out as text, never color alone.
-  success: '#1c7d43',
-  successBg: '#e6f4ea',
-  warning: '#9c5c0c',
-  warningBg: '#f8efe0',
-  danger: '#9a1f1f',
-  dangerBg: '#fbe9e9',
+  running: '#22c55e',
+  idle: '#f5a623',
+  alarm: '#e03131',
+  offline: '#94a3b8',
 
   white: '#ffffff',
 } as const;
@@ -57,53 +46,84 @@ export interface ColorScheme {
   accent: string;
   accentPressed: string;
   onAccent: string;
+  onHeader: string;
+  onHeaderMuted: string;
+  headerGradient: readonly [string, string];
   success: string;
   successBg: string;
   warning: string;
   warningBg: string;
   danger: string;
   dangerBg: string;
+  /* machine status: dot/bar colour, tint behind a pill, ink for text on it */
+  running: string; runningBg: string; runningInk: string;
+  idle: string;    idleBg: string;    idleInk: string;
+  alarm: string;   alarmBg: string;   alarmInk: string;
+  offline: string; offlineBg: string; offlineInk: string;
 }
 
 export const lightColors: ColorScheme = {
-  background: palette.ink50,
-  surface: palette.white,
-  surfaceAlt: palette.brand50,
-  border: palette.ink100,
-  textPrimary: palette.ink900,
-  textSecondary: palette.ink500,
-  textMuted: palette.ink300,
-  accent: palette.brand500,
-  accentPressed: palette.brand600,
-  onAccent: palette.white,
-  success: palette.success,
-  successBg: palette.successBg,
-  warning: palette.warning,
-  warningBg: palette.warningBg,
-  danger: palette.danger,
-  dangerBg: palette.dangerBg,
+  background: '#eef0f5',
+  surface: '#ffffff',
+  surfaceAlt: '#f5f4fc',
+  border: '#e3e6ef',
+  textPrimary: '#1f2430',
+  textSecondary: '#4b5262',
+  textMuted: '#5d6679',
+  accent: palette.navy700,
+  accentPressed: palette.navy600,
+  onAccent: '#ffffff',
+  onHeader: '#ffffff',
+  onHeaderMuted: 'rgba(255,255,255,0.82)',
+  headerGradient: palette.headerGradient,
+  success: '#15803d', successBg: '#e7f6ec',
+  warning: '#b45309', warningBg: '#fdf1e3',
+  danger: '#c32b3f', dangerBg: '#fcecee',
+  running: palette.running, runningBg: '#e7f6ec', runningInk: '#11652f',
+  idle: palette.idle,       idleBg: '#fdf1e3',    idleInk: '#8a3f06',
+  alarm: palette.alarm,     alarmBg: '#fcecee',   alarmInk: '#a11f31',
+  offline: palette.offline, offlineBg: '#eef1f5', offlineInk: '#475467',
 };
 
 export const darkColors: ColorScheme = {
-  background: '#10161d',
-  surface: '#171f28',
-  surfaceAlt: '#1b2c3a',
-  border: '#2c3a47',
-  textPrimary: '#dfe7ee',
-  textSecondary: '#a7b6c3',
-  textMuted: '#71828f',
-  // Lighter step of the brand navy — legible on near-black, still reads as
-  // "the same brand" rather than a generic blue (matches the web app's dark
-  // mode, which flattens the gradient header to near-black but keeps the
-  // same brand family for interactive elements).
-  accent: '#8891D6',
-  accentPressed: '#a3abe3',
+  background: '#0d0f15',
+  surface: '#161a23',
+  surfaceAlt: '#1d2230',
+  border: '#252b39',
+  textPrimary: '#e8ebf2',
+  textSecondary: '#a8b0c2',
+  textMuted: '#949eb2',
+  accent: '#9fb3ff',
+  accentPressed: '#bccbff',
   onAccent: '#10142b',
-  // Validated pair (scripts/validate_palette.js, dataviz skill, dark surface).
-  success: '#4a9a6a',
-  successBg: '#173322',
-  warning: '#c67818',
-  warningBg: '#2b2416',
-  danger: '#e18080',
-  dangerBg: '#331717',
+  onHeader: '#ffffff',
+  onHeaderMuted: 'rgba(255,255,255,0.78)',
+  headerGradient: palette.headerGradientDark,
+  success: '#4ade80', successBg: '#12291b',
+  warning: '#fbbf24', warningBg: '#2b2416',
+  danger: '#f87171',  dangerBg: '#331719',
+  running: palette.running, runningBg: '#12291b', runningInk: '#7fdca3',
+  idle: palette.idle,       idleBg: '#2b2416',    idleInk: '#f5c28a',
+  alarm: palette.alarm,     alarmBg: '#331719',   alarmInk: '#ffa9b4',
+  offline: palette.offline, offlineBg: '#1f2531', offlineInk: '#c3cad6',
 };
+
+export type StatusKey = 'RUNNING' | 'IDLE' | 'ALARM' | 'OFFLINE';
+
+/** A machine's display state: an alarm outranks the status it reports. */
+export function statusKey(status: string | null | undefined, alarm?: boolean): StatusKey {
+  if (alarm) return 'ALARM';
+  const s = String(status || '').toUpperCase();
+  if (s === 'RUNNING' || s === 'RUN' || s === 'CUTTING') return 'RUNNING';
+  if (s === 'IDLE') return 'IDLE';
+  return 'OFFLINE';
+}
+
+export function statusColors(c: ColorScheme, key: StatusKey) {
+  switch (key) {
+    case 'RUNNING': return { dot: c.running, bg: c.runningBg, ink: c.runningInk, label: 'Running' };
+    case 'IDLE':    return { dot: c.idle,    bg: c.idleBg,    ink: c.idleInk,    label: 'Idle' };
+    case 'ALARM':   return { dot: c.alarm,   bg: c.alarmBg,   ink: c.alarmInk,   label: 'Alarm' };
+    default:        return { dot: c.offline, bg: c.offlineBg, ink: c.offlineInk, label: 'Offline' };
+  }
+}

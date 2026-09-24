@@ -1,305 +1,202 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, FlatList, RefreshControl, Pressable, Alert, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeProvider';
+import { useAuthStore } from '../../store/authStore';
+import { hasPermission, SCREEN_PERMISSION } from '../../auth/permissions';
+import { BrandHeader } from '../../components/BrandHeader';
+import { StatusFilter } from '../../components/StatusFilter';
+import { Button } from '../../components/Button';
+import { EmptyState, NoAccess } from '../../components/EmptyState';
+import { Skeleton } from '../../components/Skeleton';
 import * as alarmsApi from '../../api/alarms';
-import { MachineAlarm, AlarmSeverity, AlarmType } from '../../types/alarm';
-import { RootStackParamList } from '../../navigation/types';
+import { MachineAlarm } from '../../types/alarm';
 
-type Nav = NativeStackNavigationProp<RootStackParamList>;
-type Tab = 'active' | 'resolved';
 const PAGE_LIMIT = 20;
+type View_ = 'active' | 'open' | 'resolved';
 
-// Same three-tier classification Backend/src/dashboard/factory.service.js
-// uses for the Factory Dashboard's alarm summary (CRITICAL stays its own
-// tier; HIGH/MEDIUM collapse to "attention"; LOW reads as informational) —
-// keeping mobile and web triage severity in one visual language.
-function severityTier(theme: ReturnType<typeof useTheme>, severity: AlarmSeverity) {
-  if (severity === 'CRITICAL') return { color: theme.colors.danger, bg: theme.colors.dangerBg, label: 'Critical' };
-  if (severity === 'HIGH' || severity === 'MEDIUM') return { color: theme.colors.warning, bg: theme.colors.warningBg, label: severity === 'HIGH' ? 'High' : 'Medium' };
-  return { color: theme.colors.textMuted, bg: theme.colors.surfaceAlt, label: 'Low' };
+const IST = 330 * 60000;
+function when(iso: string) {
+  const d = new Date(new Date(iso).getTime() + IST);
+  const today = new Date(Date.now() + IST).toISOString().slice(0, 10);
+  const h = d.getUTCHours(), m = d.getUTCMinutes();
+  const t = `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
+  const day = d.toISOString().slice(0, 10);
+  return day === today ? t : `${d.getUTCDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()]}, ${t}`;
+}
+function lasted(fromIso: string, toIso: string | null) {
+  const ms = (toIso ? new Date(toIso).getTime() : Date.now()) - new Date(fromIso).getTime();
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
 }
 
-function typeIcon(type: AlarmType): keyof typeof Ionicons.glyphMap {
-  if (type === 'OFFLINE') return 'cloud-offline-outline';
-  if (type === 'LOW_PERFORMANCE') return 'speedometer-outline';
-  return 'alert-circle-outline';
-}
-
-function typeLabel(type: AlarmType): string {
-  if (type === 'OFFLINE') return 'Machine Offline';
-  if (type === 'LOW_PERFORMANCE') return 'Low Performance';
-  return 'Alarm';
-}
-
-function timeAgo(iso: string) {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
-function SegmentButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+/*
+ * Alarms from the controllers.
+ *  - Active now: the controller has not cleared it — what is wrong on the
+ *    floor this minute;
+ *  - Unresolved: nobody has marked it dealt with yet, cleared or not;
+ *  - Resolved: marked dealt with, by whom and when.
+ * Severity is the controller's: Critical or Normal. (This screen used to
+ * expect Low / Medium / High, so every alarm read "Low".) Resolve is offered
+ * only to a role that may resolve — the API refuses anyone else.
+ */
+export function AlarmsScreen() {
   const theme = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      style={{
-        flex: 1,
-        paddingVertical: theme.spacing.sm,
-        borderRadius: theme.radius.md,
-        alignItems: 'center',
-        backgroundColor: active ? theme.colors.accent : 'transparent',
-      }}
-    >
-      <Text
-        style={{
-          fontSize: theme.type.caption,
-          fontWeight: theme.weight.semibold as any,
-          color: active ? theme.colors.onAccent : theme.colors.textSecondary,
-        }}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
+  const user = useAuthStore((s) => s.user);
+  const canSee = hasPermission(user, SCREEN_PERMISSION.alarms);
+  const canResolve = hasPermission(user, SCREEN_PERMISSION.resolveAlarm);
 
-function AlarmCard({
-  item,
-  onResolve,
-  resolving,
-  onPress,
-}: {
-  item: MachineAlarm;
-  onResolve: () => void;
-  resolving: boolean;
-  onPress: () => void;
-}) {
-  const theme = useTheme();
-  const tier = severityTier(theme, item.severity);
+  const [view, setView] = useState<View_>('active');
+  const [criticalOnly, setCriticalOnly] = useState(false);
+  const [items, setItems] = useState<MachineAlarm[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [more, setMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [resolvingId, setResolvingId] = useState<number | null>(null);
 
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}>
-      <View
-        style={{
-          flexDirection: 'row',
-          backgroundColor: theme.colors.surface,
-          borderRadius: theme.radius.lg,
-          borderWidth: 1,
-          borderColor: theme.colors.border,
-          padding: theme.spacing.md,
-          gap: theme.spacing.md,
-        }}
-      >
-        <View style={{ width: 4, borderRadius: 2, backgroundColor: tier.color }} />
+  const params = useCallback((p: number): alarmsApi.GetAlarmsParams => ({
+    page: p, limit: PAGE_LIMIT,
+    ...(view === 'active' ? { active: true, is_resolved: false } : { is_resolved: view === 'resolved' }),
+    ...(criticalOnly ? { severity: 'CRITICAL' as const } : {}),
+  }), [view, criticalOnly]);
 
-        <View style={{ flex: 1, gap: 4 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-              <Ionicons name={typeIcon(item.alarm_type)} size={15} color={tier.color} />
-              <Text style={{ fontSize: theme.type.bodyLarge, fontWeight: theme.weight.bold as any, color: theme.colors.textPrimary }} numberOfLines={1}>
-                {item.machine_serial_no}
-              </Text>
+  const load = useCallback(async (p = 1) => {
+    try {
+      const res = await alarmsApi.getAlarms(params(p));
+      setItems((prev) => (p === 1 ? res.data : [...prev, ...res.data]));
+      setTotal(res.pagination.total);
+      setPage(res.pagination.page);
+      setPages(res.pagination.totalPages || 1);
+      setError(null);
+    } catch (e: any) {
+      setError(e?.response?.status === 403 ? 'forbidden' : 'Cannot load alarms. Pull down to try again.');
+    }
+  }, [params]);
+
+  useEffect(() => {
+    if (!canSee) { setLoading(false); return; }
+    setLoading(true);
+    load(1).finally(() => setLoading(false));
+  }, [canSee, load]);
+
+  const onRefresh = useCallback(async () => { setRefreshing(true); await load(1); setRefreshing(false); }, [load]);
+  const loadMore = useCallback(async () => {
+    if (more || page >= pages) return;
+    setMore(true); await load(page + 1); setMore(false);
+  }, [more, page, pages, load]);
+
+  const resolve = useCallback(async (id: number) => {
+    setResolvingId(id);
+    try {
+      await alarmsApi.resolveAlarm(id);
+      setConfirmId(null);
+      await load(1);
+    } catch (e: any) {
+      setError(e?.response?.data?.message ?? 'Could not resolve this alarm. Try again.');
+    } finally {
+      setResolvingId(null);
+    }
+  }, [load]);
+
+  const header = <BrandHeader title="Alarms" eyebrow={canSee && !loading ? `${total} ${view === 'active' ? 'active now' : view === 'open' ? 'unresolved' : 'resolved'}` : 'Machine alarms'} />;
+  if (!canSee) return <View style={{ flex: 1, backgroundColor: theme.colors.background }}>{header}<NoAccess what="alarms" /></View>;
+
+  const renderItem = ({ item }: { item: MachineAlarm }) => {
+    const critical = String(item.severity).toUpperCase() === 'CRITICAL';
+    const activeNow = !item.ended_at;
+    const tint = critical ? theme.colors.alarm : theme.colors.idle;
+    return (
+      <View accessible={confirmId !== item.id}
+        accessibilityLabel={`${item.machine_serial_no}, ${critical ? 'critical' : 'normal'} alarm ${item.alarm_code ?? ''} ${item.message ?? item.alarm_type}, ${activeNow ? 'active' : 'cleared'}${item.is_resolved ? ', resolved' : ''}`}
+        style={{ backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, borderWidth: 1,
+          borderColor: activeNow && critical ? theme.colors.alarm : theme.colors.border, overflow: 'hidden', ...theme.shadow.card }}>
+        <View style={{ flexDirection: 'row' }}>
+          <View style={{ width: 4, backgroundColor: tint }} />
+          <View style={{ flex: 1, padding: theme.spacing.lg, gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text numberOfLines={1} style={{ flex: 1, fontSize: 16, fontWeight: theme.weight.heavy as any, color: theme.colors.textPrimary }}>{item.machine_serial_no}</Text>
+              <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, backgroundColor: critical ? theme.colors.alarmBg : theme.colors.idleBg }}>
+                <Text style={{ fontSize: 11, fontWeight: theme.weight.heavy as any, letterSpacing: 0.6, color: critical ? theme.colors.alarmInk : theme.colors.idleInk }}>
+                  {critical ? 'CRITICAL' : 'NORMAL'}
+                </Text>
+              </View>
             </View>
-            <View style={{ paddingHorizontal: theme.spacing.sm, paddingVertical: 3, borderRadius: theme.radius.pill, backgroundColor: tier.bg }}>
-              <Text style={{ fontSize: 10.5, fontWeight: theme.weight.bold as any, color: tier.color, letterSpacing: 0.3 }}>
-                {tier.label.toUpperCase()}
-              </Text>
-            </View>
-          </View>
-
-          <Text style={{ fontSize: theme.type.caption, color: theme.colors.textSecondary }}>
-            {typeLabel(item.alarm_type)}
-            {item.message ? ` · ${item.message}` : ''}
-          </Text>
-
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-            <Text style={{ fontSize: theme.type.caption, color: theme.colors.textMuted }}>
-              {item.is_resolved
-                ? `Resolved ${item.resolved_at ? timeAgo(item.resolved_at) : ''}${item.resolved_by_name ? ` · ${item.resolved_by_name}` : ''}`
-                : `Started ${timeAgo(item.started_at)}`}
+            <Text style={{ fontSize: 15, color: theme.colors.textPrimary, lineHeight: 21 }}>
+              {item.alarm_code ? <Text style={{ fontWeight: theme.weight.heavy as any }}>{item.alarm_code}  </Text> : null}
+              {item.message || item.alarm_type}
             </Text>
-
-            {!item.is_resolved && (
-              <Pressable
-                onPress={onResolve}
-                disabled={resolving}
-                hitSlop={8}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 4,
-                  paddingHorizontal: theme.spacing.sm,
-                  paddingVertical: 4,
-                  borderRadius: theme.radius.sm,
-                  borderWidth: 1,
-                  borderColor: theme.colors.accent,
-                }}
-              >
-                {resolving ? (
-                  <ActivityIndicator size="small" color={theme.colors.accent} />
-                ) : (
-                  <>
-                    <Ionicons name="checkmark" size={13} color={theme.colors.accent} />
-                    <Text style={{ fontSize: 11, fontWeight: theme.weight.semibold as any, color: theme.colors.accent }}>Resolve</Text>
-                  </>
-                )}
-              </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: activeNow ? theme.colors.alarm : theme.colors.offline }} />
+              <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>
+                {activeNow ? `Active · since ${when(item.started_at)} (${lasted(item.started_at, null)})`
+                           : `Cleared · ${when(item.started_at)}, lasted ${lasted(item.started_at, item.ended_at)}`}
+              </Text>
+            </View>
+            {item.is_resolved && (
+              <Text style={{ fontSize: 13, color: theme.colors.success, fontWeight: theme.weight.semibold as any }}>
+                Resolved{item.resolved_by_name ? ` by ${item.resolved_by_name}` : ''}{item.resolved_at ? ` · ${when(item.resolved_at)}` : ''}
+              </Text>
+            )}
+            {!item.is_resolved && canResolve && (
+              confirmId === item.id ? (
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                  <Button compact label="Confirm resolve" icon="checkmark-done" onPress={() => resolve(item.id)} loading={resolvingId === item.id} style={{ flex: 1 }} />
+                  <Button compact variant="ghost" label="Cancel" onPress={() => setConfirmId(null)} />
+                </View>
+              ) : (
+                <Button compact variant="secondary" label="Resolve" icon="checkmark" onPress={() => setConfirmId(item.id)}
+                  accessibilityLabel={`Resolve alarm on ${item.machine_serial_no}`} style={{ alignSelf: 'flex-start', marginTop: 4 }} />
+              )
             )}
           </View>
         </View>
       </View>
-    </Pressable>
-  );
-}
-
-export function AlarmsScreen() {
-  const theme = useTheme();
-  const navigation = useNavigation<Nav>();
-
-  const [tab, setTab] = useState<Tab>('active');
-  const [items, setItems] = useState<MachineAlarm[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [resolvingId, setResolvingId] = useState<number | null>(null);
-
-  const load = useCallback(async (targetTab: Tab, targetPage: number, append: boolean) => {
-    try {
-      setError(null);
-      const res = await alarmsApi.getAlarms({
-        is_resolved: targetTab === 'resolved',
-        page: targetPage,
-        limit: PAGE_LIMIT,
-      });
-      setItems((prev) => (append ? [...prev, ...res.data] : res.data));
-      setTotal(res.pagination.total);
-      setPage(res.pagination.page);
-      setHasMore(res.pagination.page < res.pagination.totalPages);
-    } catch {
-      setError('Unable to load alarms. Pull down to retry.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-      setLoadingMore(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    setLoading(true);
-    load(tab, 1, false);
-  }, [tab, load]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    load(tab, 1, false);
-  };
-
-  const onEndReached = () => {
-    if (loadingMore || !hasMore) return;
-    setLoadingMore(true);
-    load(tab, page + 1, true);
-  };
-
-  const doResolve = async (alarm: MachineAlarm) => {
-    setResolvingId(alarm.id);
-    try {
-      await alarmsApi.resolveAlarm(alarm.id);
-      setItems((prev) => prev.filter((a) => a.id !== alarm.id));
-      setTotal((t) => Math.max(0, t - 1));
-    } catch {
-      Alert.alert('Could not resolve', 'Please check your connection and try again.');
-    } finally {
-      setResolvingId(null);
-    }
-  };
-
-  const handleResolve = (alarm: MachineAlarm) => {
-    const confirmMessage = `Mark this ${alarm.machine_serial_no} alarm as resolved?`;
-    // See ProfileScreen.confirmSignOut — react-native-web doesn't implement
-    // multi-button Alert.alert, so the web preview needs window.confirm.
-    if (Platform.OS === 'web') {
-      if (window.confirm(confirmMessage)) doResolve(alarm);
-      return;
-    }
-    Alert.alert('Resolve alarm', confirmMessage, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Resolve', onPress: () => doResolve(alarm) },
-    ]);
+    );
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top', 'left', 'right']}>
-      <View style={{ paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.md }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={{ fontSize: theme.type.title, fontWeight: theme.weight.bold as any, color: theme.colors.textPrimary }}>
-            Alarms
-          </Text>
-          {!loading && (
-            <Text style={{ fontSize: theme.type.caption, color: theme.colors.textMuted, fontVariant: ['tabular-nums'] }}>
-              {total} {tab === 'active' ? 'unresolved' : 'resolved'}
-            </Text>
-          )}
-        </View>
-
-        <View
-          style={{
-            flexDirection: 'row',
-            backgroundColor: theme.colors.surfaceAlt,
-            borderRadius: theme.radius.md,
-            padding: 3,
-            marginTop: theme.spacing.md,
-            gap: 3,
-          }}
-        >
-          <SegmentButton label="Active" active={tab === 'active'} onPress={() => setTab('active')} />
-          <SegmentButton label="Resolved" active={tab === 'resolved'} onPress={() => setTab('resolved')} />
-        </View>
-      </View>
-
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <FlatList
-        data={items}
-        keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{ padding: theme.spacing.lg, flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />}
-        ItemSeparatorComponent={() => <View style={{ height: theme.spacing.sm }} />}
+        data={loading ? [] : items}
+        keyExtractor={(a) => String(a.id)}
+        renderItem={(info) => <View style={{ paddingHorizontal: theme.spacing.lg }}>{renderItem(info)}</View>}
+        onEndReached={loadMore}
         onEndReachedThreshold={0.4}
-        onEndReached={onEndReached}
-        ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginTop: theme.spacing.md }} color={theme.colors.accent} /> : null}
-        ListEmptyComponent={
-          !loading ? (
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: theme.spacing.xxxl }}>
-              <Ionicons
-                name={error ? 'cloud-offline-outline' : tab === 'active' ? 'shield-checkmark-outline' : 'file-tray-outline'}
-                size={32}
-                color={error ? theme.colors.danger : theme.colors.success}
-              />
-              <Text style={{ color: theme.colors.textSecondary, marginTop: theme.spacing.md, textAlign: 'center' }}>
-                {error ?? (tab === 'active' ? 'All clear — no active alarms' : 'No resolved alarms yet')}
-              </Text>
+        contentContainerStyle={{ paddingBottom: theme.spacing.xxl }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />}
+        ItemSeparatorComponent={() => <View style={{ height: theme.spacing.md }} />}
+        ListHeaderComponent={
+          <View style={{ marginBottom: theme.spacing.md }}>
+            {header}
+            <View style={{ paddingTop: theme.spacing.lg, gap: 10 }}>
+              <StatusFilter accessibilityLabel="Which alarms" value={view} onChange={(k) => setView(k as View_)}
+                chips={[{ key: 'active', label: 'Active now', dot: theme.colors.alarm }, { key: 'open', label: 'Unresolved' }, { key: 'resolved', label: 'Resolved' }]} />
+              <Pressable onPress={() => setCriticalOnly((v) => !v)} accessibilityRole="switch" accessibilityState={{ checked: criticalOnly }}
+                style={{ marginHorizontal: theme.spacing.lg, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36, alignSelf: 'flex-start' }}>
+                <Ionicons name={criticalOnly ? 'checkbox' : 'square-outline'} size={20} color={criticalOnly ? theme.colors.alarm : theme.colors.textMuted} />
+                <Text style={{ fontSize: 14, fontWeight: theme.weight.bold as any, color: theme.colors.textPrimary }}>Critical only</Text>
+              </Pressable>
+              {error && error !== 'forbidden' && items.length > 0 ? (
+                <Text accessibilityRole="alert" style={{ marginHorizontal: theme.spacing.lg, color: theme.colors.danger, fontWeight: theme.weight.semibold as any }}>{error}</Text>
+              ) : null}
+              {loading && <View style={{ paddingHorizontal: theme.spacing.lg, gap: theme.spacing.md }}>{[0, 1, 2].map((i) => <Skeleton key={i} width="100%" height={120} radius={theme.radius.lg} />)}</View>}
             </View>
-          ) : null
+          </View>
         }
-        renderItem={({ item }) => (
-          <AlarmCard
-            item={item}
-            resolving={resolvingId === item.id}
-            onResolve={() => handleResolve(item)}
-            onPress={() => navigation.navigate('MachineDetail', { machineId: item.machine_id, machineName: item.machine_serial_no })}
-          />
-        )}
+        ListFooterComponent={more ? <ActivityIndicator style={{ margin: theme.spacing.lg }} color={theme.colors.accent} /> : null}
+        ListEmptyComponent={loading ? null : error === 'forbidden' ? <NoAccess what="alarms" />
+          : error ? <EmptyState icon="cloud-offline-outline" tone="danger" title="Alarms not loaded" message={error} actionLabel="Try again" onAction={onRefresh} />
+          : <EmptyState icon={view === 'active' ? 'shield-checkmark-outline' : 'checkmark-done-outline'}
+              title={view === 'active' ? 'No active alarms' : view === 'open' ? 'Nothing unresolved' : 'No resolved alarms'}
+              message={view === 'active' ? (criticalOnly ? 'No critical alarm is active on any machine.' : 'Every machine is clear of alarms right now.') : undefined} />}
       />
-    </SafeAreaView>
+    </View>
   );
 }

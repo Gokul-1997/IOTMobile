@@ -3,10 +3,9 @@ import { View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ScreenContainer } from '../../components/ScreenContainer';
+import { AuthLayout, FormAlert } from '../../components/AuthLayout';
 import { TextField } from '../../components/TextField';
 import { Button } from '../../components/Button';
-import { StmMexaLogo } from '../../components/StmMexaLogo';
 import { useTheme } from '../../theme/ThemeProvider';
 import * as authApi from '../../api/auth';
 import { RootStackParamList } from '../../navigation/types';
@@ -17,6 +16,10 @@ function isValidEmail(value: string) {
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'ForgotPassword'>;
 
+/*
+ * Ask for a reset link. The answer is the same whether or not the address
+ * has an account — saying which would tell a stranger who works here.
+ */
 export function ForgotPasswordScreen() {
   const theme = useTheme();
   const navigation = useNavigation<Nav>();
@@ -24,23 +27,13 @@ export function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
-  // The backend intentionally returns the same success response whether or
-  // not the address is registered (no account-enumeration leak) — so this
-  // screen never has a real "failure" state to show for a bad email, only
-  // for the request itself not going through (see genericError below).
   const [sent, setSent] = useState(false);
   const [genericError, setGenericError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
     const trimmed = email.trim();
-    if (!trimmed) {
-      setEmailError('Email is required');
-      return;
-    }
-    if (!isValidEmail(trimmed)) {
-      setEmailError('Enter a valid email address');
-      return;
-    }
+    if (!trimmed) { setEmailError('Enter your email address.'); return; }
+    if (!isValidEmail(trimmed)) { setEmailError('That is not a valid email address.'); return; }
     setEmailError(undefined);
     setGenericError(null);
     setSubmitting(true);
@@ -48,120 +41,54 @@ export function ForgotPasswordScreen() {
       await authApi.forgotPassword(trimmed);
       setSent(true);
     } catch {
-      setGenericError('Something went wrong. Check your connection and try again.');
+      setGenericError('Cannot send the link just now. Check the connection and try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  return (
-    <ScreenContainer scroll>
-      <Pressable
-        onPress={() => navigation.goBack()}
-        hitSlop={12}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: theme.spacing.xl }}
-      >
-        <Ionicons name="chevron-back" size={20} color={theme.colors.accent} />
-        <Text style={{ color: theme.colors.accent, fontSize: theme.type.body, fontWeight: theme.weight.semibold as any }}>
-          Back to Sign In
-        </Text>
-      </Pressable>
+  const back = (
+    <Pressable onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Back to sign in" hitSlop={12}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', minHeight: 36 }}>
+      <Ionicons name="chevron-back" size={20} color={theme.colors.onHeader} />
+      <Text style={{ color: theme.colors.onHeader, fontSize: 15, fontWeight: theme.weight.bold as any }}>Sign in</Text>
+    </Pressable>
+  );
 
-      <View style={{ flex: 1, justifyContent: 'center' }}>
-        {sent ? (
-          <View style={{ alignItems: 'center' }}>
-            <View
-              style={{
-                width: 72,
-                height: 72,
-                borderRadius: theme.radius.pill,
-                backgroundColor: theme.colors.successBg,
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: theme.spacing.xl,
-              }}
-            >
-              <Ionicons name="mail-open-outline" size={32} color={theme.colors.success} />
-            </View>
-            <Text
-              style={{
-                fontSize: theme.type.title,
-                fontWeight: theme.weight.bold as any,
-                color: theme.colors.textPrimary,
-                textAlign: 'center',
-              }}
-            >
-              Check your email
-            </Text>
-            <Text
-              style={{
-                fontSize: theme.type.body,
-                color: theme.colors.textSecondary,
-                textAlign: 'center',
-                marginTop: theme.spacing.sm,
-                marginBottom: theme.spacing.xxl,
-                lineHeight: 21,
-              }}
-            >
-              If an account exists for{' '}
-              <Text style={{ color: theme.colors.textPrimary, fontWeight: theme.weight.semibold as any }}>{email.trim()}</Text>,
-              a password reset link is on its way.
-            </Text>
-            <Button label="Back to Sign In" onPress={() => navigation.goBack()} style={{ width: '100%' }} />
+  if (sent) {
+    return (
+      <AuthLayout title="Check your email" top={back}>
+        <View style={{ alignItems: 'center', gap: theme.spacing.md, marginBottom: theme.spacing.xl }}>
+          <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: theme.colors.successBg, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="mail-open-outline" size={30} color={theme.colors.success} />
           </View>
-        ) : (
-          <>
-            <View style={{ alignItems: 'center', marginBottom: theme.spacing.xxl }}>
-              <View style={{ marginBottom: theme.spacing.lg }}>
-                <StmMexaLogo width={140} dark={theme.isDark} />
-              </View>
-              <Text
-                style={{
-                  fontSize: theme.type.subtitle,
-                  fontWeight: theme.weight.bold as any,
-                  color: theme.colors.textPrimary,
-                  marginTop: theme.spacing.sm,
-                }}
-              >
-                Forgot your password?
-              </Text>
-              <Text
-                style={{
-                  fontSize: theme.type.body,
-                  color: theme.colors.textSecondary,
-                  textAlign: 'center',
-                  marginTop: theme.spacing.xs,
-                  paddingHorizontal: theme.spacing.md,
-                }}
-              >
-                Enter the email on your account and we'll send a link to reset it.
-              </Text>
-            </View>
+          <Text style={{ fontSize: theme.type.body, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 22 }}>
+            If an account exists for{' '}
+            <Text style={{ color: theme.colors.textPrimary, fontWeight: theme.weight.bold as any }}>{email.trim()}</Text>,
+            a link to reset the password is on its way. It works once, for a limited time.
+          </Text>
+        </View>
+        <Button label="Back to sign in" variant="secondary" onPress={() => navigation.goBack()} />
+      </AuthLayout>
+    );
+  }
 
-            <TextField
-              label="Email"
-              placeholder="you@company.com"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              value={email}
-              onChangeText={setEmail}
-              error={emailError}
-              returnKeyType="send"
-              onSubmitEditing={handleSubmit}
-            />
-
-            {genericError && (
-              <Text style={{ color: theme.colors.danger, fontSize: theme.type.caption, marginTop: -theme.spacing.sm, marginBottom: theme.spacing.md }}>
-                {genericError}
-              </Text>
-            )}
-
-            <Button label="Send Reset Link" onPress={handleSubmit} loading={submitting} style={{ marginTop: theme.spacing.sm }} />
-          </>
-        )}
-      </View>
-    </ScreenContainer>
+  return (
+    <AuthLayout title="Reset your password" subtitle="Enter the email on your account and we will send a link to set a new password." top={back}>
+      {genericError ? <FormAlert text={genericError} /> : null}
+      <TextField
+        label="Email"
+        value={email}
+        onChangeText={setEmail}
+        error={emailError}
+        placeholder="you@company.com"
+        autoCapitalize="none"
+        autoComplete="email"
+        keyboardType="email-address"
+        returnKeyType="send"
+        onSubmitEditing={handleSubmit}
+      />
+      <Button label="Send reset link" icon="send-outline" onPress={handleSubmit} loading={submitting} />
+    </AuthLayout>
   );
 }

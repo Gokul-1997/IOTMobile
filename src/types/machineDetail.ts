@@ -1,4 +1,12 @@
 // Mirrors Backend/src/dashboard/dashboard.service.js exports.machineDetail exactly.
+export interface ActiveAlarm {
+  alarm_code: string | null;
+  alarm_type: string;
+  message: string | null;
+  severity: string | null;
+  started_at: string;
+}
+
 export interface MachineDetailResponse {
   machine: {
     id: number;
@@ -44,6 +52,10 @@ export interface MachineDetailResponse {
   };
   live: {
     machine_status: string;
+    /** the alarm flag, kept apart from the status as the machine list keeps it */
+    alarm?: boolean;
+    /** the machine's open alarms, newest first */
+    active_alarms?: ActiveAlarm[];
     mode: string | null;
     spindle_load: number;
     feed_rate: number;
