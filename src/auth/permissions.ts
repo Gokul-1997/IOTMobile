@@ -26,7 +26,8 @@ export function hasPermission(user: AuthUser | null | undefined, key: string): b
 
   const company = grants(user.company_permissions);
   const companyAllows = company.length === 0 || matches(company, key);
-  if (roles.includes('COMPANY_ADMIN')) return companyAllows;
+  // ADMIN is the older name for the company admin role (the API reads it so)
+  if (roles.includes('COMPANY_ADMIN') || roles.includes('ADMIN')) return companyAllows;
 
   return matches(user.permissions || [], key) && companyAllows;
 }
