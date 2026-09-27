@@ -38,13 +38,14 @@ export function MachineCard({ m, onPress }: { m: DashboardMachine; onPress?: () 
       style={({ pressed }) => ({
         backgroundColor: theme.colors.surface,
         borderRadius: theme.radius.lg,
-        borderWidth: key === 'ALARM' ? 1.5 : 1,
-        borderColor: key === 'ALARM' ? theme.colors.alarm : theme.colors.border,
-        overflow: 'hidden',
+        borderWidth: key === 'ALARM' ? 1.5 : 0,
+        borderColor: theme.colors.alarm,
         opacity: pressed ? 0.9 : 1,
         ...theme.shadow.card,
       })}
     >
+      {/* clipping lives on an inner layer: on iOS a view that clips draws no shadow */}
+      <View style={{ borderRadius: theme.radius.lg, overflow: 'hidden' }}>
       <View style={{ height: 4, backgroundColor: c.dot }} />
       <View style={{ padding: theme.spacing.lg, gap: 10 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -79,6 +80,7 @@ export function MachineCard({ m, onPress }: { m: DashboardMachine; onPress?: () 
           </Text>
         </View>
       </View>
+    </View>
     </Pressable>
   );
 

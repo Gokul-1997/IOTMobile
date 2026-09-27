@@ -22,8 +22,6 @@ export function Card({ children, style, title, right, padded = true }: {
           backgroundColor: theme.colors.surface,
           borderRadius: theme.radius.lg,
           padding: padded ? theme.spacing.lg : 0,
-          borderWidth: 1,
-          borderColor: theme.colors.border,
         },
         theme.shadow.card,
         style,

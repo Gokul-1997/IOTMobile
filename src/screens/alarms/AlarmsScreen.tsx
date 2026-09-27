@@ -11,6 +11,7 @@ import { EmptyState, NoAccess } from '../../components/EmptyState';
 import { Skeleton } from '../../components/Skeleton';
 import * as alarmsApi from '../../api/alarms';
 import { MachineAlarm } from '../../types/alarm';
+import { StmScreen } from '../../components/StmScreen';
 
 const PAGE_LIMIT = 20;
 type View_ = 'active' | 'open' | 'resolved';
@@ -106,7 +107,7 @@ export function AlarmsScreen() {
   }, [load]);
 
   const header = <BrandHeader title="Alarms" eyebrow={canSee && !loading ? `${total} ${view === 'active' ? 'active now' : view === 'open' ? 'unresolved' : 'resolved'}` : 'Machine alarms'} />;
-  if (!canSee) return <View style={{ flex: 1, backgroundColor: theme.colors.background }}>{header}<NoAccess what="alarms" /></View>;
+  if (!canSee) return <StmScreen>{header}<NoAccess what="alarms" /></StmScreen>;
 
   const renderItem = ({ item }: { item: MachineAlarm }) => {
     const critical = String(item.severity).toUpperCase() === 'CRITICAL';
@@ -115,9 +116,10 @@ export function AlarmsScreen() {
     return (
       <View accessible={confirmId !== item.id}
         accessibilityLabel={`${item.machine_serial_no}, ${critical ? 'critical' : 'normal'} alarm ${item.alarm_code ?? ''} ${item.message ?? item.alarm_type}, ${activeNow ? 'active' : 'cleared'}${item.is_resolved ? ', resolved' : ''}`}
-        style={{ backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, borderWidth: 1,
-          borderColor: activeNow && critical ? theme.colors.alarm : theme.colors.border, overflow: 'hidden', ...theme.shadow.card }}>
-        <View style={{ flexDirection: 'row' }}>
+        style={{ backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg, borderWidth: activeNow && critical ? 1.5 : 0,
+          borderColor: theme.colors.alarm, ...theme.shadow.card }}>
+        {/* clipping on an inner layer: on iOS a view that clips draws no shadow */}
+        <View style={{ flexDirection: 'row', borderRadius: theme.radius.lg, overflow: 'hidden' }}>
           <View style={{ width: 4, backgroundColor: tint }} />
           <View style={{ flex: 1, padding: theme.spacing.lg, gap: 8 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -162,7 +164,7 @@ export function AlarmsScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+    <StmScreen>
       <FlatList
         data={loading ? [] : items}
         keyExtractor={(a) => String(a.id)}
@@ -170,7 +172,7 @@ export function AlarmsScreen() {
         onEndReached={loadMore}
         onEndReachedThreshold={0.4}
         contentContainerStyle={{ paddingBottom: theme.spacing.xxl }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.onField} />}
         ItemSeparatorComponent={() => <View style={{ height: theme.spacing.md }} />}
         ListHeaderComponent={
           <View style={{ marginBottom: theme.spacing.md }}>
@@ -180,11 +182,11 @@ export function AlarmsScreen() {
                 chips={[{ key: 'active', label: 'Active now', dot: theme.colors.alarm }, { key: 'open', label: 'Unresolved' }, { key: 'resolved', label: 'Resolved' }]} />
               <Pressable onPress={() => setCriticalOnly((v) => !v)} accessibilityRole="switch" accessibilityState={{ checked: criticalOnly }}
                 style={{ marginHorizontal: theme.spacing.lg, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36, alignSelf: 'flex-start' }}>
-                <Ionicons name={criticalOnly ? 'checkbox' : 'square-outline'} size={20} color={criticalOnly ? theme.colors.alarm : theme.colors.textMuted} />
-                <Text style={{ fontSize: 14, fontWeight: theme.weight.bold as any, color: theme.colors.textPrimary }}>Critical only</Text>
+                <Ionicons name={criticalOnly ? 'checkbox' : 'square-outline'} size={20} color={criticalOnly ? '#ffffff' : theme.colors.onFieldMuted} />
+                <Text style={{ fontSize: 14, fontWeight: theme.weight.bold as any, color: theme.colors.onField }}>Critical only</Text>
               </Pressable>
               {error && error !== 'forbidden' && items.length > 0 ? (
-                <Text accessibilityRole="alert" style={{ marginHorizontal: theme.spacing.lg, color: theme.colors.danger, fontWeight: theme.weight.semibold as any }}>{error}</Text>
+                <Text accessibilityRole="alert" style={{ marginHorizontal: theme.spacing.lg, color: '#ffd1d6', fontWeight: theme.weight.semibold as any }}>{error}</Text>
               ) : null}
               {loading && <View style={{ paddingHorizontal: theme.spacing.lg, gap: theme.spacing.md }}>{[0, 1, 2].map((i) => <Skeleton key={i} width="100%" height={120} radius={theme.radius.lg} />)}</View>}
             </View>
@@ -197,6 +199,6 @@ export function AlarmsScreen() {
               title={view === 'active' ? 'No active alarms' : view === 'open' ? 'Nothing unresolved' : 'No resolved alarms'}
               message={view === 'active' ? (criticalOnly ? 'No critical alarm is active on any machine.' : 'Every machine is clear of alarms right now.') : undefined} />}
       />
-    </View>
+    </StmScreen>
   );
 }

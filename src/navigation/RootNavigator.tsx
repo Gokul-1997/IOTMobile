@@ -20,7 +20,8 @@ export function RootNavigator() {
     ...(theme.isDark ? DarkTheme : DefaultTheme),
     colors: {
       ...(theme.isDark ? DarkTheme.colors : DefaultTheme.colors),
-      background: theme.colors.background,
+      // the navy end of the STM field: what shows for a frame between screens
+      background: theme.colors.field[3],
       primary: theme.colors.accent,
       card: theme.colors.surface,
       border: theme.colors.border,

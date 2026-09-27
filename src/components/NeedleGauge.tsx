@@ -21,7 +21,8 @@ export function NeedleGauge({ value, min = 0, max = 100, zones = [], fill, major
   compact?: boolean;
 }) {
   const theme = useTheme();
-  const W = compact ? 360 : 320, H = compact ? 170 : 160, CX = W / 2, CY = compact ? 150 : 140, R = compact ? 100 : 104, BAND = compact ? 24 : 20, GAP = 0.9 / 180;
+  // compact: wide enough for "150%" at the right end of the scale
+  const W = compact ? 392 : 320, H = compact ? 170 : 160, CX = W / 2, CY = compact ? 150 : 140, R = compact ? 100 : 104, BAND = compact ? 24 : 20, GAP = 0.9 / 180;
   // SVG text does not inherit the app's font on the web preview
   const FONT = Platform.OS === 'web' ? 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif' : undefined;
   const LABEL = compact ? 21 : 12;

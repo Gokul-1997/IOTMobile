@@ -17,6 +17,7 @@ import { Skeleton } from '../../components/Skeleton';
 import * as dashboardApi from '../../api/dashboard';
 import { connectSocketQuietly, joinPlant, onMachineUpdate, offMachineUpdate, MachineUpdatePayload } from '../../api/socket';
 import { DashboardMachine, DashboardResponse, MachineStatus } from '../../types/dashboard';
+import { StmScreen } from '../../components/StmScreen';
 
 /*
  * The shop floor: every machine, its state first.
@@ -208,16 +209,16 @@ export function DashboardScreen() {
   );
 
   if (!canSee) {
-    return <View style={{ flex: 1, backgroundColor: theme.colors.background }}>{header}<NoAccess what="the shop floor" /></View>;
+    return <StmScreen>{header}<NoAccess what="the shop floor" /></StmScreen>;
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+    <StmScreen>
       <FlatList
         data={loading ? [] : shown}
         keyExtractor={(m) => String(m.machine_id)}
         contentContainerStyle={{ paddingBottom: theme.spacing.xxl }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.onField} />}
         ListHeaderComponent={
           <View>
             {header}
@@ -276,6 +277,6 @@ export function DashboardScreen() {
                 actionLabel={machines.length ? 'Show all' : undefined}
                 onAction={machines.length ? () => { setFilter('ALL'); setQuery(''); } : undefined} />}
       />
-    </View>
+    </StmScreen>
   );
 }

@@ -37,12 +37,13 @@ export const fontWeight = {
 } as const;
 
 export const shadow = {
+  // cards float on the STM field, as on the web: a soft lift, no outline
   card: {
-    shadowColor: '#11142d',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowColor: '#120e40',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 5,
   },
   raised: {
     shadowColor: '#11142d',

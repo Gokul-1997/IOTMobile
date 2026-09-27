@@ -21,6 +21,7 @@ import { MachineDetailResponse } from '../../types/machineDetail';
 import { MachineTimeline } from '../../types/timeline';
 import { HourlyProductionPoint } from '../../types/chart';
 import { RootStackParamList } from '../../navigation/types';
+import { StmScreen } from '../../components/StmScreen';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MachineDetail'>;
 
@@ -106,12 +107,12 @@ export function MachineDetailScreen({ route, navigation }: Props) {
     </BrandHeader>
   );
 
-  if (!allowed) return <View style={{ flex: 1, backgroundColor: theme.colors.background }}>{header}<NoAccess what="machine details" /></View>;
+  if (!allowed) return <StmScreen>{header}<NoAccess what="machine details" /></StmScreen>;
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+    <StmScreen>
       <ScrollView contentContainerStyle={{ paddingBottom: theme.spacing.xxl }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />}>
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.onField} />}>
         {header}
 
         {loading ? (
@@ -239,7 +240,7 @@ export function MachineDetailScreen({ route, navigation }: Props) {
           </View>
         )}
       </ScrollView>
-    </View>
+    </StmScreen>
   );
 
   function HeaderFact({ label, value }: { label: string; value: string }) {

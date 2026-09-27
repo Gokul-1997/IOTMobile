@@ -24,7 +24,8 @@ export function Skeleton({ width, height, radius, style }: { width: number | `${
           width,
           height,
           borderRadius: radius ?? theme.radius.sm,
-          backgroundColor: theme.colors.border,
+          // placeholders stand on the STM field
+          backgroundColor: theme.colors.fieldChip,
           opacity,
         },
         style,

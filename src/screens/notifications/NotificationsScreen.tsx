@@ -10,6 +10,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { Skeleton } from '../../components/Skeleton';
 import * as notificationsApi from '../../api/notifications';
 import { AppNotification } from '../../types/notification';
+import { StmScreen } from '../../components/StmScreen';
 
 const IST = 330 * 60000;
 const dayOf = (iso: string) => new Date(new Date(iso).getTime() + IST).toISOString().slice(0, 10);
@@ -74,13 +75,13 @@ export function NotificationsScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+    <StmScreen>
       <SectionList
         sections={loading ? [] : sections}
         keyExtractor={(n) => String(n.id)}
         stickySectionHeadersEnabled={false}
         contentContainerStyle={{ paddingBottom: theme.spacing.xxl }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.accent} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.onField} />}
         ListHeaderComponent={
           <View>
             <BrandHeader title="Notifications" eyebrow={loading ? 'Inbox' : unread ? `${unread} unread` : 'All read'}
@@ -97,7 +98,7 @@ export function NotificationsScreen() {
         }
         renderSectionHeader={({ section }) => (
           <Text accessibilityRole="header" style={{ paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.lg, paddingBottom: 8,
-            fontSize: 11, fontWeight: theme.weight.heavy as any, letterSpacing: 1, color: theme.colors.textMuted, textTransform: 'uppercase' }}>
+            fontSize: 11, fontWeight: theme.weight.heavy as any, letterSpacing: 1, color: theme.colors.onFieldMuted, textTransform: 'uppercase' }}>
             {section.title}
           </Text>
         )}
@@ -108,8 +109,8 @@ export function NotificationsScreen() {
             <View style={{ paddingHorizontal: theme.spacing.lg }}>
               <Pressable onPress={() => open(n)} accessibilityRole="button"
                 accessibilityLabel={`${n.is_read ? '' : 'Unread. '}${n.title}. ${n.message ?? ''}. ${stamp(n.created_at)}`}
-                style={({ pressed }) => ({ flexDirection: 'row', gap: 12, padding: theme.spacing.md, borderRadius: theme.radius.lg, borderWidth: 1,
-                  borderColor: theme.colors.border, backgroundColor: pressed ? theme.colors.surfaceAlt : theme.colors.surface })}>
+                style={({ pressed }) => ({ flexDirection: 'row', gap: 12, padding: theme.spacing.md, borderRadius: theme.radius.lg,
+                  backgroundColor: pressed ? theme.colors.surfaceAlt : theme.colors.surface, ...theme.shadow.card })}>
                 <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: k.bg, alignItems: 'center', justifyContent: 'center' }}>
                   <Ionicons name={k.icon} size={20} color={k.ink} />
                 </View>
@@ -129,6 +130,6 @@ export function NotificationsScreen() {
           ? <EmptyState icon="cloud-offline-outline" tone="danger" title="Notifications not loaded" message={error} actionLabel="Try again" onAction={onRefresh} />
           : <EmptyState icon="notifications-off-outline" title="No notifications yet" message="Alarms and program transfers you follow appear here. Choose which in Settings on the web app." />}
       />
-    </View>
+    </StmScreen>
   );
 }

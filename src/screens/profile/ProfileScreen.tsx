@@ -8,6 +8,7 @@ import { BrandHeader } from '../../components/BrandHeader';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { API_BASE_URL } from '../../api/config';
+import { StmScreen } from '../../components/StmScreen';
 
 const ROLE_WORDS: Record<string, string> = {
   COMPANY_ADMIN: 'Company admin', SNT_SUPER: 'S&T super admin', SUPERVISOR: 'Supervisor',
@@ -33,7 +34,7 @@ export function ProfileScreen() {
   try { host = new URL(API_BASE_URL).host; } catch { /* keep the raw value */ }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+    <StmScreen>
       <ScrollView contentContainerStyle={{ paddingBottom: theme.spacing.xxl }}>
         <BrandHeader title="Profile" eyebrow={user?.company_name || 'Account'}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, marginTop: theme.spacing.lg }}>
@@ -81,18 +82,18 @@ export function ProfileScreen() {
 
           {confirming ? (
             <View style={{ gap: 8 }}>
-              <Text style={{ textAlign: 'center', color: theme.colors.textSecondary, fontSize: 14 }}>Sign out of this phone?</Text>
+              <Text style={{ textAlign: 'center', color: theme.colors.onField, fontSize: 14, fontWeight: theme.weight.semibold as any }}>Sign out of this phone?</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                <Button label="Cancel" variant="secondary" onPress={() => setConfirming(false)} style={{ flex: 1 }} />
+                <Button label="Cancel" variant="onField" onPress={() => setConfirming(false)} style={{ flex: 1 }} />
                 <Button label="Sign out" variant="danger" icon="log-out-outline" onPress={signOut} style={{ flex: 1 }} />
               </View>
             </View>
           ) : (
-            <Button label="Sign out" variant="secondary" icon="log-out-outline" onPress={() => setConfirming(true)} />
+            <Button label="Sign out" variant="onField" icon="log-out-outline" onPress={() => setConfirming(true)} />
           )}
         </View>
       </ScrollView>
-    </View>
+    </StmScreen>
   );
 
   function Row({ icon, label, value, last }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; last?: boolean }) {

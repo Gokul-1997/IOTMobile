@@ -2,8 +2,8 @@
  * STM MEXA — mobile colours, taken from the web app so the two read as one
  * product:
  *
- *  - brand: the logo's navy → wine gradient, as the web's .bg-top-bar draws
- *    it (#2B3990 → #9B3F70); the logo's red tail is kept for the wordmark only.
+ *  - brand: the STM field, the diagonal the web app draws behind every page
+ *    (crimson top right → navy bottom left), deepened for dark mode.
  *  - neutrals: the MEXA dashboard tokens (_mexa.scss): ground #eef0f5,
  *    card #fff, ink #1f2430 / #4b5262 / #5d6679, rule #e3e6ef.
  *  - machine status: the same four colours the web uses everywhere — the
@@ -19,10 +19,10 @@ export const palette = {
   wine500: '#9B3F70',
   red500: '#EF4136',
 
-  // the web top bar, and a deepened version for dark mode (the brand stays
-  // recognisable instead of going flat black)
-  headerGradient: ['#2B3990', '#9B3F70'] as const,
-  headerGradientDark: ['#1A2257', '#4A2138'] as const,
+  // the STM field behind every screen — the web app's page ground, as the
+  // design PDF draws it: crimson top right to navy bottom left
+  field: ['#b8404f', '#6e3b78', '#3f3a8c', '#2b3990'] as const,
+  fieldDark: ['#461a2e', '#2a1840', '#171a45', '#0e1233'] as const,
 
   // the full logo gradient — hero surfaces only
   brandGradient: ['#2B3990', '#843D67', '#EF4136'] as const,
@@ -48,7 +48,12 @@ export interface ColorScheme {
   onAccent: string;
   onHeader: string;
   onHeaderMuted: string;
-  headerGradient: readonly [string, string];
+  /* the STM field behind every screen, and what sits on it outside a card */
+  field: readonly [string, string, string, string];
+  onField: string;
+  onFieldMuted: string;
+  fieldChip: string;
+  fieldChipBorder: string;
   success: string;
   successBg: string;
   warning: string;
@@ -75,7 +80,11 @@ export const lightColors: ColorScheme = {
   onAccent: '#ffffff',
   onHeader: '#ffffff',
   onHeaderMuted: 'rgba(255,255,255,0.82)',
-  headerGradient: palette.headerGradient,
+  field: palette.field,
+  onField: '#ffffff',
+  onFieldMuted: 'rgba(255,255,255,0.84)',
+  fieldChip: 'rgba(255,255,255,0.14)',
+  fieldChipBorder: 'rgba(255,255,255,0.32)',
   success: '#15803d', successBg: '#e7f6ec',
   warning: '#b45309', warningBg: '#fdf1e3',
   danger: '#c32b3f', dangerBg: '#fcecee',
@@ -98,7 +107,11 @@ export const darkColors: ColorScheme = {
   onAccent: '#10142b',
   onHeader: '#ffffff',
   onHeaderMuted: 'rgba(255,255,255,0.78)',
-  headerGradient: palette.headerGradientDark,
+  field: palette.fieldDark,
+  onField: '#ffffff',
+  onFieldMuted: 'rgba(255,255,255,0.8)',
+  fieldChip: 'rgba(255,255,255,0.1)',
+  fieldChipBorder: 'rgba(255,255,255,0.22)',
   success: '#4ade80', successBg: '#12291b',
   warning: '#fbbf24', warningBg: '#2b2416',
   danger: '#f87171',  dangerBg: '#331719',

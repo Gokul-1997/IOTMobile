@@ -6,7 +6,7 @@ import { useTheme } from '../theme/ThemeProvider';
 interface ButtonProps {
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'onField';
   icon?: keyof typeof Ionicons.glyphMap;
   loading?: boolean;
   disabled?: boolean;
@@ -15,17 +15,20 @@ interface ButtonProps {
   accessibilityLabel?: string;
 }
 
-/* One button, four jobs: primary (the one action), secondary (outlined),
-   danger (irreversible), ghost (quiet). 48pt tall, 36 when compact. */
+/* One button, five jobs: primary (the one action), secondary (outlined),
+   danger (irreversible), ghost (quiet), onField (white, for a button that
+   stands on the STM field outside a card). 48pt tall, 36 when compact. */
 export function Button({ label, onPress, variant = 'primary', icon, loading, disabled, compact, style, accessibilityLabel }: ButtonProps) {
   const theme = useTheme();
   const off = disabled || loading;
   const fill =
     variant === 'primary' ? theme.colors.accent :
-    variant === 'danger' ? theme.colors.danger : 'transparent';
+    variant === 'danger' ? theme.colors.danger :
+    variant === 'onField' ? '#ffffff' : 'transparent';
   const ink =
     variant === 'primary' ? theme.colors.onAccent :
     variant === 'danger' ? '#ffffff' :
+    variant === 'onField' ? '#2B3990' :
     variant === 'secondary' ? theme.colors.accent : theme.colors.textSecondary;
   return (
     <Pressable
