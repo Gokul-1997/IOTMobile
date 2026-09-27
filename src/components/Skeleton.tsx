@@ -1,6 +1,9 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, ViewStyle } from 'react-native';
+import { Animated, Platform, ViewStyle } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
+
+// the web build has no native animation driver
+const NATIVE = Platform.OS !== 'web';
 
 export function Skeleton({ width, height, radius, style }: { width: number | `${number}%`; height: number; radius?: number; style?: ViewStyle }) {
   const theme = useTheme();
@@ -9,8 +12,8 @@ export function Skeleton({ width, height, radius, style }: { width: number | `${
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(opacity, { toValue: 1, duration: 650, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.4, duration: 650, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 650, useNativeDriver: NATIVE }),
+        Animated.timing(opacity, { toValue: 0.4, duration: 650, useNativeDriver: NATIVE }),
       ])
     );
     loop.start();
