@@ -8,6 +8,7 @@ import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 import { BootstrapScreen } from '../screens/BootstrapScreen';
 import { MachineDetailScreen } from '../screens/machine/MachineDetailScreen';
 import { MainTabs } from './MainTabs';
+import { AppBar } from '../components/AppBar';
 import { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -39,8 +40,14 @@ export function RootNavigator() {
         {status === 'signedIn' ? (
           <>
             <Stack.Screen name="Main" component={MainTabs} />
-            {/* the machine screen draws its own brand header, with a back button */}
-            <Stack.Screen name="MachineDetail" component={MachineDetailScreen} options={{ animation: 'slide_from_right' }} />
+            {/* the app bar again, with a back button before the logo */}
+            <Stack.Screen name="MachineDetail" component={MachineDetailScreen} options={({ navigation }) => ({
+              animation: 'slide_from_right',
+              headerShown: true,
+              header: () => (
+                <AppBar onBack={() => navigation.goBack()} onProfile={() => navigation.navigate('Main', { screen: 'Profile' })} />
+              ),
+            })} />
           </>
         ) : (
           <>

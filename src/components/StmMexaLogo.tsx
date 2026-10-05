@@ -1,5 +1,27 @@
 import React, { useId } from 'react';
+import { View } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop, ClipPath, Rect, G } from 'react-native-svg';
+import { useTheme } from '../theme/ThemeProvider';
+
+/*
+ * The STM MEXA mark exactly as the web app draws it — navy STM over the MEXA
+ * gradient — and never recoloured for a theme. Where the ground is not white
+ * (the dark theme; pass `plate` on the STM field) it sits on a white plate,
+ * the tile its original colours need; on white it stands bare, so it lines
+ * up with the text under it. The plate's proportions match the dark splash
+ * screen (assets/splash-icon-dark.png).
+ */
+export function BrandLogo({ width = 84, plate }: { width?: number; plate?: boolean }) {
+  const theme = useTheme();
+  const onPlate = plate ?? theme.isDark;
+  return (
+    <View accessible accessibilityRole="image" accessibilityLabel="STM MEXA"
+      style={onPlate ? { backgroundColor: '#ffffff', borderRadius: Math.round(width * 0.083),
+        paddingHorizontal: Math.round(width * 0.117), paddingVertical: Math.round(width * 0.1) } : undefined}>
+      <StmMexaLogo width={width} />
+    </View>
+  );
+}
 
 // Direct port of FrontendIOT/public/images/logo/STM_Mexa_logo.svg — same
 // paths, same gradient stops, so the mobile wordmark matches the web app
@@ -15,13 +37,13 @@ import Svg, { Path, Defs, LinearGradient, Stop, ClipPath, Rect, G } from 'react-
 /*
  * The MEXA letters referenced a fixed gradient id ("mexaGrad") while the
  * gradient itself was declared under a per-instance id, so they painted with
- * nothing: every screen showed "STM" alone. `mono` draws the whole mark in
- * white, for the brand-gradient headers where the colour gradient would
- * vanish into the background.
+ * nothing: every screen showed "STM" alone. There is one colouring only —
+ * the original: a white or light-STM version is not the brand's mark, so a
+ * dark or coloured background puts the mark on its plate (BrandLogo).
  */
-export function StmMexaLogo({ width = 123, dark = false, mono = false }: { width?: number; dark?: boolean; mono?: boolean }) {
+export function StmMexaLogo({ width = 123 }: { width?: number }) {
   const height = (width / 246) * 88;
-  const stmColor = mono ? '#FFFFFF' : dark ? '#E8ECF5' : '#102B4E';
+  const stmColor = '#102B4E';
   // useId() yields ids like ":r1:" — not valid inside url(#…) everywhere
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const gradientId = `mexaGrad-${uid}`;
@@ -47,7 +69,7 @@ export function StmMexaLogo({ width = 123, dark = false, mono = false }: { width
         {/* MEXA — gradient wordmark */}
         <Path
           d="M62.5823 38.2482H85.7698V87.9829H72.367V51.0528H71.0244L60.1703 79.0129C57.6899 85.4037 55.8183 87.9601 49.1795 87.9601H33.5012V51.0528H32.1644C29.4167 51.0528 27.9433 52.2568 26.7999 55.3153L14.7396 87.9943H0L14.7396 51.7604C18.7218 42.0257 23.9213 38.2596 33.5126 38.2596H46.9154V75.2069H48.2522L62.5823 38.2482ZM246 55.7661V88H231.778V76.7304H207.646V88.0057H175.106L163.991 71.5949L163.956 70.7561L163.922 71.5949L152.806 87.9715H133.982H105.299C93.2391 87.9715 88.5573 82.1969 88.5573 67.1498V59.087C88.5573 44.0285 93.2391 38.2482 105.299 38.2482H136.115H154.069L163.939 50.6362L173.815 38.2482H192.201L175.095 62.174L193.436 87.3324V55.7661C193.436 43.1612 199.545 38.2653 215.44 38.2653H223.973C239.896 38.2653 246 43.1612 246 55.7661ZM152.801 62.1855L136.115 38.8645V51.7033H107.313C103.092 51.7033 101.135 53.1355 100.703 56.7304H136.115V69.5007H100.703C101.129 73.107 103.086 74.545 107.313 74.545H136.115V85.0614L152.801 62.1855ZM231.789 57.9002C231.789 52.8502 229.804 50.893 224.69 50.893H214.746C209.626 50.893 207.646 52.8502 207.646 57.9002V63.9829H231.789V57.9002Z"
-          fill={mono ? '#FFFFFF' : `url(#${gradientId})`}
+          fill={`url(#${gradientId})`}
         />
         {/* STM */}
         <Path d="M62.9748 0L61.9337 7.15549H73.0212L72.987 7.40656L71.7014 16.291L69.7387 29.8374H79.9387L83.2154 7.40656L83.2553 7.15549H94.3655L95.4065 0H62.9748Z" fill={stmColor} />

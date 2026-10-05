@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { useAuthStore } from '../store/authStore';
+import { AppBar } from '../components/AppBar';
 import { hasPermission, SCREEN_PERMISSION } from '../auth/permissions';
 import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
 import { AlarmsScreen } from '../screens/alarms/AlarmsScreen';
@@ -36,6 +38,7 @@ const BADGE_POLL_MS = 60_000;
  */
 export function MainTabs() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const canAlarms = hasPermission(user, SCREEN_PERMISSION.alarms);
   const [unread, setUnread] = useState(0);
@@ -59,15 +62,21 @@ export function MainTabs() {
 
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
+      screenOptions={({ route, navigation }) => ({
+        // the logo and the profile, over every tab
+        header: () => (
+          <AppBar profileActive={route.name === 'Profile'} onProfile={() => navigation.navigate('Profile')} />
+        ),
         tabBarActiveTintColor: theme.colors.accent,
         tabBarInactiveTintColor: theme.colors.textMuted,
         tabBarLabelStyle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.2 },
         tabBarStyle: {
-          backgroundColor: theme.colors.surface,
-          borderTopColor: theme.colors.border,
-          height: 64,
+          backgroundColor: theme.colors.chrome,
+          borderTopColor: theme.colors.chromeBorder,
+          // 64 for the icons and labels, plus the home indicator (iPhone, iPad)
+          // or Android's navigation bar: the tab bar still pads by that inset,
+          // but a fixed height replaces its own, so the inset must be added here
+          height: 64 + insets.bottom,
           paddingTop: 6,
         },
         tabBarBadgeStyle: { backgroundColor: theme.colors.alarm, color: '#fff', fontSize: 10, fontWeight: '800' },

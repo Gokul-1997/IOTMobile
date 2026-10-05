@@ -195,10 +195,10 @@ export function DashboardScreen() {
             {([['RUNNING', 'Running', theme.colors.running], ['IDLE', 'Idle', theme.colors.idle],
                ['ALARM', 'Alarm', theme.colors.alarm], ['OFFLINE', 'Offline', theme.colors.offline]] as const).map(([k, label, dot]) => (
               <View key={k} style={{ width: '50%' }} accessible accessibilityLabel={`${label} ${counts[k]}`}>
-                <Text style={{ color: '#fff', fontSize: 26, fontWeight: theme.weight.heavy as any, fontVariant: ['tabular-nums'] }}>{counts[k]}</Text>
+                <Text maxFontSizeMultiplier={theme.textScale.figure} style={{ color: '#fff', fontSize: 26, fontWeight: theme.weight.heavy as any, fontVariant: ['tabular-nums'] }}>{counts[k]}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dot }} />
-                  <Text style={{ color: theme.colors.onHeaderMuted, fontSize: 11, fontWeight: theme.weight.bold as any, letterSpacing: 0.8, textTransform: 'uppercase' }}>{label}</Text>
+                  <Text numberOfLines={1} maxFontSizeMultiplier={theme.textScale.figure} style={{ flexShrink: 1, color: theme.colors.onHeaderMuted, fontSize: 11, fontWeight: theme.weight.bold as any, letterSpacing: 0.8, textTransform: 'uppercase' }}>{label}</Text>
                 </View>
               </View>
             ))}

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeProvider';
 import { statusKey } from '../../theme/colors';
@@ -44,8 +45,9 @@ const sinceIST = (iso: string) => {
  * the live dials, the shift so far, and the figures behind OEE. The web
  * machine page's content, laid out for a phone.
  */
-export function MachineDetailScreen({ route, navigation }: Props) {
+export function MachineDetailScreen({ route }: Props) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { machineId, machineName } = route.params;
   const user = useAuthStore((s) => s.user);
   const allowed = hasPermission(user, SCREEN_PERMISSION.machine);
@@ -95,12 +97,13 @@ export function MachineDetailScreen({ route, navigation }: Props) {
   const eyebrow = [detail?.shift?.shift_code, detail?.operator?.operator_name].filter((x) => x && x !== '--').join(' · ') || 'Machine';
 
   const header = (
-    <BrandHeader title={detail?.machine?.name || machineName} eyebrow={eyebrow} onBack={() => navigation.goBack()} showLogo={false}
+    // the back button is in the app bar (RootNavigator)
+    <BrandHeader title={detail?.machine?.name || machineName} eyebrow={eyebrow}
       right={detail ? <StatusPill status={key} onHeader /> : undefined}>
       {detail && (
         <View style={{ flexDirection: 'row', gap: theme.spacing.xl, marginTop: theme.spacing.md }}>
           <HeaderFact label="Mode" value={live?.mode || '--'} />
-          <HeaderFact label="Part" value={detail.job?.part_name || 'No active job'} />
+          <HeaderFact label="Part" value={detail.job?.part_name || 'No active job'} fill />
           <HeaderFact label="Parts" value={String(live?.parts_count ?? 0)} />
         </View>
       )}
@@ -111,7 +114,8 @@ export function MachineDetailScreen({ route, navigation }: Props) {
 
   return (
     <StmScreen>
-      <ScrollView contentContainerStyle={{ paddingBottom: theme.spacing.xxl }}
+      {/* no tab bar on this screen: the last card clears the home indicator / Android's navigation bar itself */}
+      <ScrollView contentContainerStyle={{ paddingBottom: theme.spacing.xxl + insets.bottom }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.onField} />}>
         {header}
 
@@ -243,11 +247,14 @@ export function MachineDetailScreen({ route, navigation }: Props) {
     </StmScreen>
   );
 
-  function HeaderFact({ label, value }: { label: string; value: string }) {
+  // the part name takes the room that is left; mode and count keep their width
+  function HeaderFact({ label, value, fill }: { label: string; value: string; fill?: boolean }) {
     return (
-      <View style={{ flexShrink: 1 }}>
-        <Text style={{ color: theme.colors.onHeaderMuted, fontSize: 10, fontWeight: theme.weight.bold as any, letterSpacing: 1, textTransform: 'uppercase' }}>{label}</Text>
-        <Text numberOfLines={1} style={{ color: theme.colors.onHeader, fontSize: 15, fontWeight: theme.weight.bold as any, marginTop: 2 }}>{value}</Text>
+      <View style={fill ? { flex: 1, minWidth: 0 } : { flexShrink: 0, maxWidth: 120 }}>
+        <Text numberOfLines={1} maxFontSizeMultiplier={theme.textScale.figure}
+          style={{ color: theme.colors.onHeaderMuted, fontSize: 10, fontWeight: theme.weight.bold as any, letterSpacing: 1, textTransform: 'uppercase' }}>{label}</Text>
+        <Text numberOfLines={1} maxFontSizeMultiplier={theme.textScale.figure}
+          style={{ color: theme.colors.onHeader, fontSize: 15, fontWeight: theme.weight.bold as any, marginTop: 2 }}>{value}</Text>
       </View>
     );
   }

@@ -86,7 +86,8 @@ export function NeedleGauge({ value, min = 0, max = 100, zones = [], fill, major
         <Circle cx={CX} cy={CY} r={10} fill={ink} />
         <Circle cx={CX} cy={CY} r={5} fill={theme.colors.surface} />
       </Svg>
-      <Text style={{ textAlign: 'center', fontSize: compact ? 22 : 26, fontWeight: '800', color: ink, fontVariant: ['tabular-nums'], marginTop: 2 }}>
+      <Text numberOfLines={1} maxFontSizeMultiplier={theme.textScale.figure}
+        style={{ textAlign: 'center', fontSize: compact ? 22 : 26, fontWeight: '800', color: ink, fontVariant: ['tabular-nums'], marginTop: 2 }}>
         {valueText(value)}
       </Text>
     </View>

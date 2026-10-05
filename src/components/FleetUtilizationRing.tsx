@@ -57,11 +57,12 @@ export function FleetUtilizationRing({ value, size = 128, stroke = 11 }: { value
         )}
       </Svg>
       <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+        {/* sized to the ring, which does not grow with the phone's text size */}
         <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
-          <Text style={{ fontSize: size * 0.27, fontWeight: theme.weight.heavy as any, color: '#FFFFFF', lineHeight: size * 0.3 }}>{Math.round(pct)}</Text>
-          <Text style={{ fontSize: 15, fontWeight: theme.weight.bold as any, color: 'rgba(255,255,255,0.85)', marginBottom: 4, marginLeft: 1 }}>%</Text>
+          <Text maxFontSizeMultiplier={theme.textScale.fixed} style={{ fontSize: size * 0.27, fontWeight: theme.weight.heavy as any, color: '#FFFFFF', lineHeight: size * 0.3 }}>{Math.round(pct)}</Text>
+          <Text maxFontSizeMultiplier={theme.textScale.fixed} style={{ fontSize: 15, fontWeight: theme.weight.bold as any, color: 'rgba(255,255,255,0.85)', marginBottom: 4, marginLeft: 1 }}>%</Text>
         </View>
-        <Text style={{ fontSize: 10, fontWeight: theme.weight.bold as any, letterSpacing: 1, color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase' }}>
+        <Text maxFontSizeMultiplier={theme.textScale.fixed} style={{ fontSize: 10, fontWeight: theme.weight.bold as any, letterSpacing: 1, color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase' }}>
           Utilisation
         </Text>
       </View>

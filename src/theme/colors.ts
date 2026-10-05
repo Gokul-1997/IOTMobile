@@ -3,7 +3,8 @@
  * product:
  *
  *  - brand: the STM field, the diagonal the web app draws behind every page
- *    (crimson top right → navy bottom left), deepened for dark mode.
+ *    (crimson top right → navy bottom left); dark mode trades it for a
+ *    near-black ground. The logo is never recoloured in either theme.
  *  - neutrals: the MEXA dashboard tokens (_mexa.scss): ground #eef0f5,
  *    card #fff, ink #1f2430 / #4b5262 / #5d6679, rule #e3e6ef.
  *  - machine status: the same four colours the web uses everywhere — the
@@ -22,7 +23,9 @@ export const palette = {
   // the STM field behind every screen — the web app's page ground, as the
   // design PDF draws it: crimson top right to navy bottom left
   field: ['#b8404f', '#6e3b78', '#3f3a8c', '#2b3990'] as const,
-  fieldDark: ['#461a2e', '#2a1840', '#171a45', '#0e1233'] as const,
+  // dark mode is dark: a near-black ground with the faintest lift at the
+  // top right, not the brand diagonal deepened (that read as purple)
+  fieldDark: ['#161821', '#111319', '#0d0f14', '#0a0b0f'] as const,
 
   // the full logo gradient — hero surfaces only
   brandGradient: ['#2B3990', '#843D67', '#EF4136'] as const,
@@ -45,7 +48,9 @@ export interface ColorScheme {
   textMuted: string;
   accent: string;
   accentPressed: string;
-  onAccent: string;
+  /* a primary button's fill and its label */
+  primary: string;
+  onPrimary: string;
   onHeader: string;
   onHeaderMuted: string;
   /* the STM field behind every screen, and what sits on it outside a card */
@@ -54,6 +59,12 @@ export interface ColorScheme {
   onFieldMuted: string;
   fieldChip: string;
   fieldChipBorder: string;
+  /* a button standing on the field outside a card (Sign out, Try again) */
+  fieldButton: string;
+  fieldButtonInk: string;
+  /* the top bar (logo, profile) and the tab bar */
+  chrome: string;
+  chromeBorder: string;
   success: string;
   successBg: string;
   warning: string;
@@ -77,7 +88,8 @@ export const lightColors: ColorScheme = {
   textMuted: '#5d6679',
   accent: palette.navy700,
   accentPressed: palette.navy600,
-  onAccent: '#ffffff',
+  primary: palette.navy700,
+  onPrimary: '#ffffff',
   onHeader: '#ffffff',
   onHeaderMuted: 'rgba(255,255,255,0.82)',
   field: palette.field,
@@ -85,6 +97,10 @@ export const lightColors: ColorScheme = {
   onFieldMuted: 'rgba(255,255,255,0.84)',
   fieldChip: 'rgba(255,255,255,0.14)',
   fieldChipBorder: 'rgba(255,255,255,0.32)',
+  fieldButton: '#ffffff',
+  fieldButtonInk: palette.navy700,
+  chrome: '#ffffff',
+  chromeBorder: '#e3e6ef',
   success: '#15803d', successBg: '#e7f6ec',
   warning: '#b45309', warningBg: '#fdf1e3',
   danger: '#c32b3f', dangerBg: '#fcecee',
@@ -95,23 +111,30 @@ export const lightColors: ColorScheme = {
 };
 
 export const darkColors: ColorScheme = {
-  background: '#0d0f15',
-  surface: '#161a23',
-  surfaceAlt: '#1d2230',
-  border: '#252b39',
+  background: '#0a0b0f',
+  surface: '#171a21',
+  surfaceAlt: '#1e222b',
+  border: '#272c36',
   textPrimary: '#e8ebf2',
   textSecondary: '#a8b0c2',
   textMuted: '#949eb2',
   accent: '#9fb3ff',
   accentPressed: '#bccbff',
-  onAccent: '#10142b',
+  // a solid brand blue, not the pale accent: white on it is 5.4:1, and it
+  // stands 3:1 off a dark card
+  primary: '#4a5be0',
+  onPrimary: '#ffffff',
   onHeader: '#ffffff',
   onHeaderMuted: 'rgba(255,255,255,0.78)',
   field: palette.fieldDark,
   onField: '#ffffff',
   onFieldMuted: 'rgba(255,255,255,0.8)',
-  fieldChip: 'rgba(255,255,255,0.1)',
-  fieldChipBorder: 'rgba(255,255,255,0.22)',
+  fieldChip: 'rgba(255,255,255,0.08)',
+  fieldChipBorder: 'rgba(255,255,255,0.18)',
+  fieldButton: '#1e222b',
+  fieldButtonInk: '#e8ebf2',
+  chrome: '#111318',
+  chromeBorder: '#22262f',
   success: '#4ade80', successBg: '#12291b',
   warning: '#fbbf24', warningBg: '#2b2416',
   danger: '#f87171',  dangerBg: '#331719',

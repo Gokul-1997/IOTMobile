@@ -14,7 +14,7 @@
     "android": {
       "package": "com.dharstec.mexamonitor",
       "adaptiveIcon": {
-        "backgroundColor": "#2B3990",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -32,9 +32,10 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#2B3990",
+          "backgroundColor": "#FFFFFF",
           "dark": {
-            "backgroundColor": "#1A2257"
+            "image": "./assets/splash-icon-dark.png",
+            "backgroundColor": "#0B0C10"
           }
         }
       ],

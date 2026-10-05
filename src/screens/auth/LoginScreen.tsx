@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, Pressable, TextInput } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthLayout, FormAlert } from '../../components/AuthLayout';
@@ -22,6 +22,7 @@ export function LoginScreen() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const passwordRef = useRef<TextInput>(null);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -67,8 +68,12 @@ export function LoginScreen() {
         keyboardType="email-address"
         textContentType="username"
         returnKeyType="next"
+        // Next goes on to the password with the keyboard still up
+        submitBehavior="submit"
+        onSubmitEditing={() => passwordRef.current?.focus()}
       />
       <TextField
+        ref={passwordRef}
         label="Password"
         value={password}
         onChangeText={setPassword}

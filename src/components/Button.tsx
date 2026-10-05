@@ -16,19 +16,20 @@ interface ButtonProps {
 }
 
 /* One button, five jobs: primary (the one action), secondary (outlined),
-   danger (irreversible), ghost (quiet), onField (white, for a button that
-   stands on the STM field outside a card). 48pt tall, 36 when compact. */
+   danger (irreversible), ghost (quiet), onField (white — a dark tile in dark
+   mode — for a button that stands on the field outside a card). 48pt tall,
+   36 when compact. */
 export function Button({ label, onPress, variant = 'primary', icon, loading, disabled, compact, style, accessibilityLabel }: ButtonProps) {
   const theme = useTheme();
   const off = disabled || loading;
   const fill =
-    variant === 'primary' ? theme.colors.accent :
+    variant === 'primary' ? theme.colors.primary :
     variant === 'danger' ? theme.colors.danger :
-    variant === 'onField' ? '#ffffff' : 'transparent';
+    variant === 'onField' ? theme.colors.fieldButton : 'transparent';
   const ink =
-    variant === 'primary' ? theme.colors.onAccent :
+    variant === 'primary' ? theme.colors.onPrimary :
     variant === 'danger' ? '#ffffff' :
-    variant === 'onField' ? '#2B3990' :
+    variant === 'onField' ? theme.colors.fieldButtonInk :
     variant === 'secondary' ? theme.colors.accent : theme.colors.textSecondary;
   return (
     <Pressable

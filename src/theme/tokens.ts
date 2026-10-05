@@ -28,6 +28,16 @@ export const typeScale = {
   display: 32,
 } as const;
 
+/* How far the phone's text-size setting may enlarge text that sits in a
+   fixed shape (maxFontSizeMultiplier). `fixed`: drawn inside a graphic —
+   the utilisation ring — which does not grow. `figure`: counts, times and
+   axis labels laid out in rows; past 1.3× they collide or clip. Sentences
+   (alarm messages, notifications, forms) follow the setting uncapped. */
+export const textScale = {
+  fixed: 1,
+  figure: 1.3,
+} as const;
+
 export const fontWeight = {
   regular: '400',
   medium: '500',

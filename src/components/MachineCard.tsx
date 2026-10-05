@@ -71,10 +71,11 @@ export function MachineCard({ m, onPress }: { m: DashboardMachine; onPress?: () 
           <Meter value={util} color={theme.colors.accent} />
         </View>
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        {/* wraps rather than running together on a narrow phone or with larger text */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', columnGap: 12, rowGap: 6 }}>
           <Time label="Run" value={m.run_time} color={theme.colors.running} />
           <Time label="Idle" value={m.idle_time} color={theme.colors.idle} />
-          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, fontVariant: ['tabular-nums'] }}>
+          <Text maxFontSizeMultiplier={theme.textScale.figure} style={{ fontSize: 12, color: theme.colors.textSecondary, fontVariant: ['tabular-nums'] }}>
             <Text style={{ fontWeight: theme.weight.bold as any, color: theme.colors.textPrimary }}>{m.achieved_qty ?? 0}</Text>
             {target ? ` / ${target}` : ''} pcs
           </Text>
@@ -96,8 +97,8 @@ export function MachineCard({ m, onPress }: { m: DashboardMachine; onPress?: () 
     return (
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
         <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: color }} />
-        <Text style={{ fontSize: 12, color: theme.colors.textMuted }}>{label}</Text>
-        <Text style={{ fontSize: 13, fontWeight: theme.weight.bold as any, color: theme.colors.textPrimary, fontVariant: ['tabular-nums'] }}>{value || '00:00:00'}</Text>
+        <Text maxFontSizeMultiplier={theme.textScale.figure} style={{ fontSize: 12, color: theme.colors.textMuted }}>{label}</Text>
+        <Text maxFontSizeMultiplier={theme.textScale.figure} style={{ fontSize: 13, fontWeight: theme.weight.bold as any, color: theme.colors.textPrimary, fontVariant: ['tabular-nums'] }}>{value || '00:00:00'}</Text>
       </View>
     );
   }

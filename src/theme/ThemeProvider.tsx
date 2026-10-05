@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useColorScheme } from 'react-native';
 import { lightColors, darkColors, ColorScheme } from './colors';
-import { spacing, radius, typeScale, fontWeight, shadow } from './tokens';
+import { spacing, radius, typeScale, textScale, fontWeight, shadow } from './tokens';
 import { getPref, setPref } from '../store/prefs';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
@@ -12,6 +12,7 @@ interface Theme {
   spacing: typeof spacing;
   radius: typeof radius;
   type: typeof typeScale;
+  textScale: typeof textScale;
   weight: typeof fontWeight;
   shadow: typeof shadow;
   isDark: boolean;
@@ -46,6 +47,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       spacing,
       radius,
       type: typeScale,
+      textScale,
       weight: fontWeight,
       shadow,
       isDark,

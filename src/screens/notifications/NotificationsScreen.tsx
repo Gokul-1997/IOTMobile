@@ -115,9 +115,10 @@ export function NotificationsScreen() {
                   <Ionicons name={k.icon} size={20} color={k.ink} />
                 </View>
                 <View style={{ flex: 1, gap: 3 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text numberOfLines={1} style={{ flex: 1, fontSize: 15, color: theme.colors.textPrimary, fontWeight: (n.is_read ? theme.weight.semibold : theme.weight.heavy) as any }}>{n.title}</Text>
-                    <Text style={{ fontSize: 12, color: theme.colors.textMuted }}>{stamp(n.created_at)}</Text>
+                  {/* two lines: on a small phone one line cut the alarm's name off ("VMC-2-M: AIR PRESSU…") */}
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+                    <Text numberOfLines={2} style={{ flex: 1, fontSize: 15, color: theme.colors.textPrimary, fontWeight: (n.is_read ? theme.weight.semibold : theme.weight.heavy) as any }}>{n.title}</Text>
+                    <Text style={{ fontSize: 12, color: theme.colors.textMuted, marginTop: 2 }}>{stamp(n.created_at)}</Text>
                   </View>
                   {n.message ? <Text numberOfLines={2} style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 18 }}>{n.message}</Text> : null}
                 </View>

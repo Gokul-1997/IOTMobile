@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 
 interface TextFieldProps extends TextInputProps {
+  /** the input itself, so a form can move focus to it */
+  ref?: React.Ref<TextInput>;
   label: string;
   error?: string | null;
   secureToggle?: boolean;

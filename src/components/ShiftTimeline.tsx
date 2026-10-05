@@ -70,9 +70,11 @@ export function ShiftTimeline({ data }: { data: MachineTimeline }) {
         )}
       </Pressable>
 
-      <View style={{ height: 16, marginTop: 4 }}>
+      {/* 60 wide: "10:30 am" broke onto two lines in 44 and ran into the legend */}
+      <View style={{ height: 18, marginTop: 4 }}>
         {width > 0 && ticks.map((t, i) => (
-          <Text key={i} style={{ position: 'absolute', left: Math.min(Math.max(x(t) - 22, 0), width - 44), width: 44, textAlign: i === 0 ? 'left' : i === ticks.length - 1 ? 'right' : 'center',
+          <Text key={i} numberOfLines={1} maxFontSizeMultiplier={theme.textScale.figure}
+            style={{ position: 'absolute', left: Math.min(Math.max(x(t) - 30, 0), width - 60), width: 60, textAlign: i === 0 ? 'left' : i === ticks.length - 1 ? 'right' : 'center',
             fontSize: 10, fontWeight: theme.weight.bold as any, color: theme.colors.textMuted }}>{clock(t).replace(':00', '')}</Text>
         ))}
       </View>

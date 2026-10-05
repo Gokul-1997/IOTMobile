@@ -1,16 +1,16 @@
 import React from 'react';
-import { View, Text, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, KeyboardAvoidingView } from 'react-native';
 import { StmScreen } from './StmScreen';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { useTheme } from '../theme/ThemeProvider';
-import { StmMexaLogo } from './StmMexaLogo';
+import { BrandLogo } from './StmMexaLogo';
 
 /*
- * The signed-out screens: the STM field with the STM MEXA mark and the
- * product's name, and the form on a white card over it — the web app's
- * sign-in, at the size a first screen deserves.
+ * The signed-out screens: the STM field, and on it one card opening with the
+ * STM MEXA mark in its own colours and the product's name, then the form —
+ * the web app's sign-in, at the size a first screen deserves.
  */
 export function AuthLayout({ title, subtitle, children, top }: {
   title: string; subtitle?: string; children: React.ReactNode; top?: React.ReactNode;
@@ -20,22 +20,26 @@ export function AuthLayout({ title, subtitle, children, top }: {
   const version = Constants.expoConfig?.version ?? '1.0.0';
   return (
     <StmScreen>
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    {/* padding on Android too: the app draws edge to edge there, so Android no
+        longer shrinks the window for the keyboard, and on a small phone the
+        field being typed in sat under it */}
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
       <StatusBar style="light" />
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" bounces={false}>
-        <View style={{ paddingTop: insets.top + theme.spacing.lg, paddingBottom: theme.spacing.xxl, paddingHorizontal: theme.spacing.xl }}>
+        <View style={{ paddingTop: insets.top + theme.spacing.lg, paddingHorizontal: theme.spacing.xl }}>
           {top}
-          <View style={{ alignItems: 'center', marginTop: theme.spacing.xl, gap: theme.spacing.md }}>
-            <StmMexaLogo width={168} mono />
-            <Text style={{ color: theme.colors.onHeaderMuted, fontSize: theme.type.micro, fontWeight: theme.weight.bold as any,
-              letterSpacing: 2, textTransform: 'uppercase' }}>
-              Machine Monitoring System
-            </Text>
-          </View>
         </View>
 
-        <View style={{ flex: 1, paddingHorizontal: theme.spacing.lg }}>
+        {/* the card, centred on the field, opens with the original mark — as the web sign-in does */}
+        <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.xl }}>
           <View style={[{ backgroundColor: theme.colors.surface, borderRadius: theme.radius.xl, padding: theme.spacing.xl }, theme.shadow.raised]}>
+            <View style={{ alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.xl }}>
+              <BrandLogo width={150} />
+              <Text style={{ color: theme.colors.textMuted, fontSize: theme.type.micro, fontWeight: theme.weight.bold as any,
+                letterSpacing: 2, textTransform: 'uppercase', textAlign: 'center' }}>
+                Machine Monitoring System
+              </Text>
+            </View>
             <Text accessibilityRole="header" style={{ fontSize: theme.type.title, fontWeight: theme.weight.heavy as any, color: theme.colors.textPrimary }}>
               {title}
             </Text>
