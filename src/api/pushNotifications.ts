@@ -1,10 +1,18 @@
-import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 
 // Firebase (FCM) is the committed push provider — we register the native
 // device token (FCM on Android, APNs on iOS) rather than Expo's push service.
-Notifications.setNotificationHandler({
+
+// Expo Go on Android has had no remote push since SDK 53, and loading
+// expo-notifications there throws while the app starts (a red screen before
+// sign-in), so the module is loaded only where push exists: a real build on
+// either platform, or Expo Go on iOS.
+const pushAvailable = !(Platform.OS === 'android' && Constants.executionEnvironment === ExecutionEnvironment.StoreClient);
+const Notifications: typeof import('expo-notifications') | null = pushAvailable ? require('expo-notifications') : null;
+
+Notifications?.setNotificationHandler({
   handleNotification: async () => ({
     shouldPlaySound: true,
     shouldSetBadge: true,
@@ -14,8 +22,8 @@ Notifications.setNotificationHandler({
 });
 
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
-  if (!Device.isDevice) {
-    // Push tokens are not available on simulators/emulators.
+  if (!Notifications || !Device.isDevice) {
+    // Push tokens are not available on simulators/emulators, nor in Expo Go on Android.
     return null;
   }
 

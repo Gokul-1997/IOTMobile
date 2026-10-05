@@ -32,7 +32,8 @@ export function AuthLayout({ title, subtitle, children, top }: {
 
         {/* the card, centred on the field, opens with the original mark — as the web sign-in does */}
         <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: theme.spacing.lg, paddingVertical: theme.spacing.xl }}>
-          <View style={[{ backgroundColor: theme.colors.surface, borderRadius: theme.radius.xl, padding: theme.spacing.xl }, theme.shadow.raised]}>
+          {/* phone width at most: on a tablet the form stays a form, not a banner */}
+          <View style={[{ width: '100%', maxWidth: 480, alignSelf: 'center', backgroundColor: theme.colors.surface, borderRadius: theme.radius.xl, padding: theme.spacing.xl }, theme.shadow.raised]}>
             <View style={{ alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.xl }}>
               <BrandLogo width={150} />
               <Text style={{ color: theme.colors.textMuted, fontSize: theme.type.micro, fontWeight: theme.weight.bold as any,
