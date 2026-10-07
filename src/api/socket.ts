@@ -1,13 +1,8 @@
 import { io, Socket } from 'socket.io-client';
 import { SOCKET_URL } from './config';
 import { secureTokenStore } from './secureTokenStore';
-import { getRefreshedAccessToken } from './client';
-
-// Mirrors FrontendIOT/src/app/core/services/socket.service.ts: the backend
-// pushes machineUpdate over the plant's room the instant new MQTT telemetry
-// lands (via Redis pub/sub — see Backend/src/server.js), which is how the
-// web dashboard gets sub-second status/alarm updates instead of only
-// relying on the periodic REST poll. This is that same channel for mobile.
+import { getRefreshedAccessToken, expireSession } from './client';
+import { sessionVersion } from './session';
 
 export interface MachineUpdatePayload {
   machine_id: number;
@@ -16,111 +11,85 @@ export interface MachineUpdatePayload {
   alarm?: boolean;
   received_at?: string | number;
 }
-
 let socket: Socket | null = null;
 let connecting: Promise<void> | null = null;
-let joinedPlantId: number | null = null;
+let cancelConnect: (() => void) | undefined;
+let generation = 0;
 let refreshing = false;
+let machineIds: number[] = [];
+const connectedListeners = new Set<() => void>();
+const listeners = new Set<(data: MachineUpdatePayload) => void>();
 
-async function buildSocket(): Promise<Socket> {
-  const token = await secureTokenStore.getAccessToken();
-
-  const s = io(SOCKET_URL, {
-    transports: ['websocket'],
-    autoConnect: false,
-    reconnection: true,
-    reconnectionAttempts: 5,
-    reconnectionDelay: 2000,
-    auth: { token },
-  });
-
-  s.on('connect', () => {
-    refreshing = false;
-    if (joinedPlantId != null) s.emit('joinPlant', joinedPlantId);
-  });
-
-  // Same distinct error messages as the web client (see server.js socket
-  // auth middleware): TOKEN_EXPIRED is recoverable via silent refresh,
-  // Unauthorized (tampered/invalid token) is not.
-  s.on('connect_error', async (err) => {
-    if (err.message === 'TOKEN_EXPIRED') {
-      if (refreshing) return;
-      refreshing = true;
-      const newToken = await getRefreshedAccessToken();
-      refreshing = false;
-      if (newToken) {
-        (s.auth as any).token = newToken;
-        s.connect();
-      }
-      // If refresh failed, the HTTP layer's own 401 handling will already
-      // be signing the user out — nothing extra to do here.
-    }
-  });
-
-  return s;
-}
-
-/**
- * Resolves once connected; rejects if the socket cannot connect (websocket
- * blocked, server restarting). Screens call it without waiting on it —
- * see connectSocketQuietly — because the REST poll is the floor and live
- * updates only sit on top of it.
- */
-export async function connectSocket(): Promise<void> {
-  if (socket?.connected) return;
+export function connectSocket(): Promise<void> {
+  if (socket?.connected) return Promise.resolve();
   if (connecting) return connecting;
-
-  connecting = (async () => {
-    if (!socket) socket = await buildSocket();
-    if (socket.connected) return;
-
-    await new Promise<void>((resolve, reject) => {
-      socket!.once('connect', () => resolve());
-      socket!.once('connect_error', (err) => {
-        // TOKEN_EXPIRED resolves itself via the reconnect above.
-        if (err.message !== 'TOKEN_EXPIRED') reject(err);
+  const current = generation;
+  const session = sessionVersion();
+  const attempt = (async () => {
+    const token = await secureTokenStore.getAccessToken();
+    if (current !== generation || session !== sessionVersion()) throw new Error('Session changed');
+    if (!token) throw new Error('No active session');
+    if (!socket) {
+      const s = socket = io(SOCKET_URL, {
+        transports: ['websocket'], autoConnect: false, reconnection: true,
+        reconnectionAttempts: Infinity, reconnectionDelay: 2000,
+        reconnectionDelayMax: 30000, randomizationFactor: 0.5, auth: { token }
       });
-      socket!.connect();
+      s.on('connect', () => { if (socket === s) { refreshing = false; s.emit('subscribeMachines', machineIds); for (const callback of connectedListeners) callback(); } });
+      s.on('machineUpdate', data => { for (const callback of listeners) callback(data); });
+      s.on('connect_error', async error => {
+        if (socket === s && session === sessionVersion() && error.message === 'Unauthorized') { expireSession(session); return; }
+        if (error.message !== 'TOKEN_EXPIRED' || refreshing || socket !== s) return;
+        refreshing = true;
+        try {
+          const token = await getRefreshedAccessToken();
+          if (socket !== s || session !== sessionVersion()) return;
+          if (token) { s.auth = { token }; s.connect(); }
+          else { cancelConnect?.(); expireSession(session); }
+        } catch { cancelConnect?.(); }
+        finally { if (socket === s) refreshing = false; }
+      });
+    }
+    const s = socket;
+    await new Promise<void>((resolve, reject) => {
+      const done = (error?: Error) => {
+        clearTimeout(timeout);
+        s.off('connect', connected); s.off('connect_error', failed);
+        if (cancelConnect === cancelled) cancelConnect = undefined;
+        error ? reject(error) : resolve();
+      };
+      const connected = () => done();
+      const failed = (error: Error) => { if (error.message !== 'TOKEN_EXPIRED') done(error); };
+      const cancelled = () => done(new Error('Live connection cancelled'));
+      const timeout = setTimeout(() => done(new Error('Live connection timed out')), 15000);
+      cancelConnect = cancelled;
+      s.on('connect', connected); s.on('connect_error', failed); s.connect();
     });
   })();
-
-  try {
-    await connecting;
-  } finally {
-    connecting = null;
-  }
+  const pending = attempt.finally(() => { if (connecting === pending) connecting = null; });
+  connecting = pending;
+  return pending;
 }
 
-export function joinPlant(plantId: number): void {
-  joinedPlantId = plantId;
-  if (socket?.connected) socket.emit('joinPlant', plantId);
+export function onSocketConnected(callback: () => void): () => void {
+  connectedListeners.add(callback);
+  return () => { connectedListeners.delete(callback); };
 }
-
-export function onMachineUpdate(callback: (data: MachineUpdatePayload) => void): void {
-  socket?.off('machineUpdate');
-  socket?.on('machineUpdate', callback);
+export function setMachineIds(ids: number[]) {
+  machineIds = [...new Set(ids)];
+  if (socket?.connected) socket.emit('subscribeMachines', machineIds);
 }
-
-export function offMachineUpdate(): void {
-  socket?.off('machineUpdate');
+export function onMachineUpdate(callback: (data: MachineUpdatePayload) => void): () => void {
+  listeners.add(callback);
+  return () => { listeners.delete(callback); };
 }
-
-/** Full disconnect — call only on sign-out, not on screen unmount. */
 export function disconnectSocket(): void {
-  if (!socket) return;
-  socket.removeAllListeners();
-  socket.disconnect();
-  socket = null;
-  joinedPlantId = null;
+  generation++;
+  cancelConnect?.();
+  socket?.removeAllListeners(); socket?.disconnect();
+  socket = null; connecting = null; refreshing = false; machineIds = [];
+  listeners.clear(); connectedListeners.clear();
 }
-
-/** Connect without letting a failure escape: a socket that cannot connect
- *  used to surface as an unhandled "websocket error" in the screen. */
 export async function connectSocketQuietly(): Promise<boolean> {
-  try {
-    await connectSocket();
-    return true;
-  } catch {
-    return false;
-  }
+  try { await connectSocket(); return true; } catch { return false; }
 }

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, FlatList, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useAuthStore } from '../../store/authStore';
 import { hasPermission, SCREEN_PERMISSION } from '../../auth/permissions';

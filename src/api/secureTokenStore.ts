@@ -33,6 +33,14 @@ async function deleteItem(key: string): Promise<void> {
   await SecureStore.deleteItemAsync(key);
 }
 
+// Serialize mutations so an old token write cannot finish after logout clears it.
+let mutations: Promise<unknown> = Promise.resolve();
+function mutate(work: () => Promise<void>): Promise<void> {
+  const next = mutations.then(work, work);
+  mutations = next.catch(() => {});
+  return next;
+}
+
 export const secureTokenStore = {
   async getAccessToken() {
     return getItem(ACCESS_TOKEN_KEY);
@@ -41,10 +49,10 @@ export const secureTokenStore = {
     return getItem(REFRESH_TOKEN_KEY);
   },
   async setTokens(accessToken: string, refreshToken: string) {
-    await Promise.all([setItem(ACCESS_TOKEN_KEY, accessToken), setItem(REFRESH_TOKEN_KEY, refreshToken)]);
+    await mutate(async () => { await Promise.all([setItem(ACCESS_TOKEN_KEY, accessToken), setItem(REFRESH_TOKEN_KEY, refreshToken)]); });
   },
   async setAccessToken(accessToken: string) {
-    await setItem(ACCESS_TOKEN_KEY, accessToken);
+    await mutate(() => setItem(ACCESS_TOKEN_KEY, accessToken));
   },
   // The backend has no self-profile endpoint (GET /users/:id is admin-only),
   // so the logged-in user's profile is cached locally at sign-in time and
@@ -59,9 +67,9 @@ export const secureTokenStore = {
     }
   },
   async setUser(user: unknown) {
-    await setItem(USER_KEY, JSON.stringify(user));
+    await mutate(() => setItem(USER_KEY, JSON.stringify(user)));
   },
   async clear() {
-    await Promise.all([deleteItem(ACCESS_TOKEN_KEY), deleteItem(REFRESH_TOKEN_KEY), deleteItem(USER_KEY)]);
+    await mutate(async () => { await Promise.all([deleteItem(ACCESS_TOKEN_KEY), deleteItem(REFRESH_TOKEN_KEY), deleteItem(USER_KEY)]); });
   },
 };

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, FlatList, RefreshControl, TextInput } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -15,9 +15,12 @@ import { MachineCard } from '../../components/MachineCard';
 import { EmptyState, NoAccess } from '../../components/EmptyState';
 import { Skeleton } from '../../components/Skeleton';
 import * as dashboardApi from '../../api/dashboard';
-import { connectSocketQuietly, joinPlant, onMachineUpdate, offMachineUpdate, MachineUpdatePayload } from '../../api/socket';
+import { connectSocketQuietly, setMachineIds, onMachineUpdate, onSocketConnected, MachineUpdatePayload } from '../../api/socket';
 import { DashboardMachine, DashboardResponse, MachineStatus } from '../../types/dashboard';
 import { StmScreen } from '../../components/StmScreen';
+import { Button } from '../../components/Button';
+import { useAppActive } from '../../hooks/useAppActive';
+import { telemetrySeconds } from '../../api/telemetryTime';
 
 /*
  * The shop floor: every machine, its state first.
@@ -56,6 +59,9 @@ type Filter = 'ALL' | StatusKey;
 
 export function DashboardScreen() {
   const theme = useTheme();
+  const appActive = useAppActive();
+  const focused = useIsFocused();
+  const active = appActive && focused;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const user = useAuthStore((s) => s.user);
   const canSee = hasPermission(user, SCREEN_PERMISSION.dashboard);
@@ -69,15 +75,43 @@ export function DashboardScreen() {
   const [now, setNow] = useState(Date.now());
   const [filter, setFilter] = useState<Filter>('ALL');
   const [query, setQuery] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const requestRef = useRef<AbortController | null>(null);
+  const visibleIds = useRef(new Set<number>());
+  useEffect(() => { const timer = setTimeout(() => { setSearch(query.trim()); setPage(1); }, 300); return () => clearTimeout(timer); }, [query]);
 
+  const pendingUpdates = useRef(new Map<number, { status: MachineStatus; alarm: boolean }>());
   const lastSeenRef = useRef<Map<number, number>>(new Map());      // telemetry freshness, s
   const lastSocketRef = useRef<Map<number, number>>(new Map());    // when the socket last spoke, ms
 
   const fetchSilently = useCallback(async () => {
+    if (!active || !canSee) return;
+    requestRef.current?.abort();
+    const request = new AbortController();
+    requestRef.current = request;
     try {
-      const data = await dashboardApi.getDashboard();
-      const nowSec = Math.floor(Date.now() / 1000);
-      for (const m of data.machines) if (m.status !== 'OFFLINE') lastSeenRef.current.set(m.machine_id, nowSec);
+      const data = await dashboardApi.getDashboard({ page, status: filter.toLowerCase(), search, signal: request.signal });
+      if (request.signal.aborted) return;
+      if (data.pagination && page > data.pagination.total_pages) { setPage(data.pagination.total_pages); return; }
+      visibleIds.current = new Set(data.machines.map(m => m.machine_id));
+      setMachineIds([...visibleIds.current]);
+      for (const map of [lastSeenRef.current, lastSocketRef.current]) {
+        for (const id of map.keys()) if (!visibleIds.current.has(id)) map.delete(id);
+      }
+      const socketNewer = new Set<number>();
+      for (const m of data.machines) {
+        const received = telemetrySeconds(m.received_at);
+        const latest = lastSeenRef.current.get(m.machine_id) ?? 0;
+        const socketLive = Date.now() - (lastSocketRef.current.get(m.machine_id) ?? 0) < SOCKET_SILENT_MS;
+        if (socketLive && (received == null || latest > received)) socketNewer.add(m.machine_id);
+        else {
+          // Keep server telemetry time, never the phone's snapshot-fetch time.
+          if (received != null) lastSeenRef.current.set(m.machine_id, Math.max(latest, received));
+          else if (m.status !== 'OFFLINE') lastSeenRef.current.set(m.machine_id, Math.floor(Date.now() / 1000));
+          pendingUpdates.current.delete(m.machine_id);
+        }
+      }
 
       setDashboard((prev) => {
         if (!prev) return data;
@@ -85,35 +119,44 @@ export function DashboardScreen() {
         const machines = data.machines.map((incoming) => {
           const old = existing.get(incoming.machine_id);
           if (!old) return incoming;
-          const socketLive = Date.now() - (lastSocketRef.current.get(incoming.machine_id) ?? 0) < SOCKET_SILENT_MS;
-          // the socket owns status and alarm while it is live for this machine
-          return socketLive ? { ...incoming, status: old.status, alarm: old.alarm } : incoming;
+          const live = pendingUpdates.current.get(incoming.machine_id) ?? old;
+          return socketNewer.has(incoming.machine_id) ? { ...incoming, status: live.status, alarm: live.alarm } : incoming;
         });
         return { ...data, machines };
       });
       setError(null);
       setLastUpdated(new Date());
     } catch (e: any) {
+      if (request.signal.aborted || e?.code === 'ERR_CANCELED') return;
       const status = e?.response?.status;
       setError(status === 403 ? 'forbidden' : 'Cannot reach the server. Showing the last data received.');
+    } finally {
+      if (requestRef.current === request && !request.signal.aborted) setLoading(false);
     }
-  }, []);
+  }, [active, canSee, page, filter, search, user?.id]);
 
   const applySocketUpdate = useCallback((update: MachineUpdatePayload) => {
-    const receivedAtSec = update.received_at != null
-      ? Math.floor(new Date(update.received_at).getTime() / 1000) || Number(update.received_at)
-      : Math.floor(Date.now() / 1000);
+    if (!visibleIds.current.has(update.machine_id)) return;
+    const receivedAtSec = telemetrySeconds(update.received_at);
+    if (receivedAtSec == null || receivedAtSec < (lastSeenRef.current.get(update.machine_id) ?? 0)) return;
     lastSeenRef.current.set(update.machine_id, receivedAtSec);
     lastSocketRef.current.set(update.machine_id, Date.now());
     const status = resolveStatus(update.machine_status, receivedAtSec);
-    setDashboard((prev) => {
+    pendingUpdates.current.set(update.machine_id, { status, alarm: !!update.alarm });
+  }, []);
+
+  const flushUpdates = useCallback(() => {
+    if (!pendingUpdates.current.size) return;
+    const updates = new Map(pendingUpdates.current);
+    pendingUpdates.current.clear();
+    setDashboard(prev => {
       if (!prev) return prev;
       let changed = false;
-      const machines = prev.machines.map((m) => {
-        if (m.machine_id !== update.machine_id) return m;
-        if (m.status === status && m.alarm === !!update.alarm) return m;
+      const machines = prev.machines.map(machine => {
+        const patch = updates.get(machine.machine_id);
+        if (!patch || (machine.status === patch.status && machine.alarm === patch.alarm)) return machine;
         changed = true;
-        return { ...m, status, alarm: !!update.alarm };
+        return { ...machine, ...patch };
       });
       return changed ? { ...prev, machines } : prev;
     });
@@ -139,24 +182,24 @@ export function DashboardScreen() {
 
   useEffect(() => {
     if (!canSee) { setLoading(false); return; }
-    (async () => { await fetchSilently(); setLoading(false); })();
+    if (!active) return;
+    setLoading(true);
+    void fetchSilently();
+    const batch = setInterval(flushUpdates, 500);
     const poll = setInterval(fetchSilently, POLL_INTERVAL_MS);
     const sweep = setInterval(sweepStaleness, STALENESS_SWEEP_MS);
-    return () => { clearInterval(poll); clearInterval(sweep); };
-  }, [canSee, fetchSilently, sweepStaleness]);
+    return () => { requestRef.current?.abort(); clearInterval(batch); pendingUpdates.current.clear(); clearInterval(poll); clearInterval(sweep); };
+  }, [active, canSee, fetchSilently, sweepStaleness, flushUpdates]);
 
-  // live updates on top of the poll; a socket that cannot connect is not an error
+  // Company admins may have no plant; the server authenticates company scope.
   useEffect(() => {
-    if (!canSee || !user?.plant_id) return;
-    let cancelled = false;
-    (async () => {
-      const ok = await connectSocketQuietly();
-      if (cancelled || !ok) return;
-      joinPlant(Number(user.plant_id));
-      onMachineUpdate(applySocketUpdate);
-    })();
-    return () => { cancelled = true; offMachineUpdate(); };
-  }, [canSee, user?.plant_id, applySocketUpdate]);
+    if (!canSee || !active) return;
+    const stop = onMachineUpdate(applySocketUpdate);
+    const stopConnected = onSocketConnected(() => { void fetchSilently(); });
+    void connectSocketQuietly();
+    setMachineIds([...visibleIds.current]);
+    return () => { stop(); stopConnected(); setMachineIds([]); };
+  }, [canSee, active, user?.id, applySocketUpdate, fetchSilently]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -165,24 +208,15 @@ export function DashboardScreen() {
   }, [fetchSilently]);
 
   const machines = dashboard?.machines ?? [];
-  const counts = useMemo(() => {
-    const c = { RUNNING: 0, IDLE: 0, ALARM: 0, OFFLINE: 0 };
-    for (const m of machines) c[statusKey(m.status, m.alarm)]++;
-    const util = machines.length ? machines.reduce((s, m) => s + (Number(m.utilization) || 0), 0) / machines.length : 0;
-    return { ...c, util };
-  }, [machines]);
-
-  const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return machines
-      .filter((m) => filter === 'ALL' || statusKey(m.status, m.alarm) === filter)
-      .filter((m) => !q || m.machine_serial_no.toLowerCase().includes(q) || (m.operator_name || '').toLowerCase().includes(q))
-      // alarms first, then running, idle, offline; by name within each
-      .sort((a, b) => {
-        const order: Record<StatusKey, number> = { ALARM: 0, RUNNING: 1, IDLE: 2, OFFLINE: 3 };
-        return order[statusKey(a.status, a.alarm)] - order[statusKey(b.status, b.alarm)] || a.machine_serial_no.localeCompare(b.machine_serial_no, undefined, { numeric: true });
-      });
-  }, [machines, filter, query]);
+  const counts = {
+    RUNNING: dashboard?.summary.running ?? 0,
+    IDLE: dashboard?.summary.idle ?? 0,
+    ALARM: dashboard?.summary.alarm ?? 0,
+    OFFLINE: dashboard?.summary.offline ?? 0,
+  };
+  const total = dashboard?.summary.total ?? 0;
+  const shown = machines;
+  const pages = dashboard?.pagination?.total_pages ?? 1;
 
   const eyebrow = [user?.company_name, dashboard?.shift?.shift_code].filter(Boolean).join(' · ') || 'Live';
 
@@ -190,7 +224,7 @@ export function DashboardScreen() {
     <BrandHeader title="Shop Floor" eyebrow={eyebrow} right={canSee ? <LiveTag label={timeAgo(lastUpdated, now)} /> : undefined}>
       {canSee && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.lg, marginTop: theme.spacing.lg }}>
-          <FleetUtilizationRing value={counts.util} size={116} />
+          <FleetUtilizationRing value={total ? counts.RUNNING * 100 / total : 0} label="Running" size={116} />
           <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', rowGap: 12 }}>
             {([['RUNNING', 'Running', theme.colors.running], ['IDLE', 'Idle', theme.colors.idle],
                ['ALARM', 'Alarm', theme.colors.alarm], ['OFFLINE', 'Offline', theme.colors.offline]] as const).map(([k, label, dot]) => (
@@ -226,9 +260,9 @@ export function DashboardScreen() {
               <StatusFilter
                 accessibilityLabel="Show machines"
                 value={filter}
-                onChange={(k) => setFilter(k as Filter)}
+                onChange={(k) => { setFilter(k as Filter); setPage(1); }}
                 chips={[
-                  { key: 'ALL', label: 'All', count: machines.length },
+                  { key: 'ALL', label: 'All', count: total },
                   { key: 'ALARM', label: 'Alarm', count: counts.ALARM, dot: theme.colors.alarm },
                   { key: 'RUNNING', label: 'Running', count: counts.RUNNING, dot: theme.colors.running },
                   { key: 'IDLE', label: 'Idle', count: counts.IDLE, dot: theme.colors.idle },
@@ -238,8 +272,8 @@ export function DashboardScreen() {
               <View style={{ marginHorizontal: theme.spacing.lg, flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44,
                 paddingHorizontal: 12, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface }}>
                 <Ionicons name="search" size={18} color={theme.colors.textMuted} />
-                <TextInput value={query} onChangeText={setQuery} placeholder="Search machine or operator"
-                  placeholderTextColor={theme.colors.textMuted} accessibilityLabel="Search machine or operator"
+                <TextInput value={query} onChangeText={setQuery} placeholder="Search machine"
+                  placeholderTextColor={theme.colors.textMuted} accessibilityLabel="Search machine"
                   autoCapitalize="none" autoCorrect={false} returnKeyType="search"
                   style={{ flex: 1, color: theme.colors.textPrimary, fontSize: 15, paddingVertical: 10 }} />
                 {query ? <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} onPress={() => setQuery('')} accessibilityLabel="Clear search" /> : null}
@@ -267,15 +301,24 @@ export function DashboardScreen() {
               : undefined} />
           </View>
         )}
+        ListFooterComponent={pages > 1 ? (
+          <View style={{ padding: theme.spacing.lg, gap: 12 }}>
+            <Text accessibilityLiveRegion="polite" style={{ color: theme.colors.textSecondary }}>Page {page} of {pages}</Text>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <Button label="Previous" variant="secondary" disabled={page <= 1 || loading} onPress={() => setPage(p => p - 1)} />
+              <Button label="Next" variant="secondary" disabled={page >= pages || loading} onPress={() => setPage(p => p + 1)} />
+            </View>
+          </View>
+        ) : null}
         ListEmptyComponent={loading ? null : error === 'forbidden'
           ? <NoAccess what="the shop floor" />
           : !dashboard && error
             ? <EmptyState icon="cloud-offline-outline" tone="danger" title="Cannot reach the server" message={error} actionLabel="Try again" onAction={onRefresh} />
             : <EmptyState icon="hardware-chip-outline"
-                title={machines.length ? 'No machines match' : 'No machines yet'}
-                message={machines.length ? 'Change the filter or the search.' : 'Machines appear here once they are added and start reporting.'}
-                actionLabel={machines.length ? 'Show all' : undefined}
-                onAction={machines.length ? () => { setFilter('ALL'); setQuery(''); } : undefined} />}
+                title={total ? 'No machines match' : 'No machines yet'}
+                message={total ? 'Change the filter or the search.' : 'Machines appear here once they are added and start reporting.'}
+                actionLabel={total ? 'Show all' : undefined}
+                onAction={total ? () => { setFilter('ALL'); setQuery(''); } : undefined} />}
       />
     </StmScreen>
   );

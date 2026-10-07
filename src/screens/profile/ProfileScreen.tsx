@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import Constants from 'expo-constants';
 import { useTheme, ThemeMode } from '../../theme/ThemeProvider';
 import { useAuthStore } from '../../store/authStore';

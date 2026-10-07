@@ -16,7 +16,7 @@ import { useTheme } from '../theme/ThemeProvider';
  */
 const SWEEP_MS = 800;
 
-export function FleetUtilizationRing({ value, size = 128, stroke = 11 }: { value: number; size?: number; stroke?: number }) {
+export function FleetUtilizationRing({ value, size = 128, stroke = 11, label = 'Utilisation' }: { value: number; size?: number; stroke?: number; label?: string }) {
   const theme = useTheme();
   const pct = Math.max(0, Math.min(100, Number(value) || 0));
   const r = (size - stroke) / 2;
@@ -47,7 +47,7 @@ export function FleetUtilizationRing({ value, size = 128, stroke = 11 }: { value
   }, [pct]);
 
   return (
-    <View accessible accessibilityRole="image" accessibilityLabel={`Fleet utilisation ${Math.round(pct)} percent`}
+    <View accessible accessibilityRole="image" accessibilityLabel={`${label} ${Math.round(pct)} percent`}
       style={{ width: size, height: size }}>
       <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
         <Circle cx={size / 2} cy={size / 2} r={r} stroke="rgba(255,255,255,0.22)" strokeWidth={stroke} fill="none" />
@@ -63,7 +63,7 @@ export function FleetUtilizationRing({ value, size = 128, stroke = 11 }: { value
           <Text maxFontSizeMultiplier={theme.textScale.fixed} style={{ fontSize: 15, fontWeight: theme.weight.bold as any, color: 'rgba(255,255,255,0.85)', marginBottom: 4, marginLeft: 1 }}>%</Text>
         </View>
         <Text maxFontSizeMultiplier={theme.textScale.fixed} style={{ fontSize: 10, fontWeight: theme.weight.bold as any, letterSpacing: 1, color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase' }}>
-          Utilisation
+          {label}
         </Text>
       </View>
     </View>

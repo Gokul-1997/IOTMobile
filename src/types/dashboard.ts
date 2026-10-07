@@ -10,6 +10,7 @@ export interface DashboardMachine {
   component_id: number | null;
   status: MachineStatus;
   alarm: boolean;
+  received_at?: number | string | null;
   run_minutes: number;
   idle_minutes: number;
   run_time: string; // HH:MM:SS
@@ -30,6 +31,8 @@ export interface DashboardSummary {
   total: number;
   running: number;
   idle: number;
+  alarm?: number;
+  offline?: number;
 }
 
 export interface DashboardResponse {
@@ -37,4 +40,5 @@ export interface DashboardResponse {
   shift: DashboardShift | null;
   summary: DashboardSummary;
   machines: DashboardMachine[];
+  pagination?: { page: number; per_page: number; total: number; total_pages: number };
 }

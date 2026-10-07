@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, Text, ActivityIndicator, ViewStyle, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '../theme/ThemeProvider';
 
 interface ButtonProps {

@@ -4,6 +4,7 @@ import { registerSessionExpiredHandler } from '../api/client';
 import { secureTokenStore } from '../api/secureTokenStore';
 import { disconnectSocket } from '../api/socket';
 import { AuthUser } from '../types/auth';
+import { invalidateSessionRequests, sessionVersion } from '../api/session';
 
 interface AuthState {
   user: AuthUser | null;
@@ -24,33 +25,43 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // The user profile is restored from the local cache saved at sign-in,
   // since there's no self-profile endpoint to re-fetch it from.
   bootstrap: async () => {
+    const version = sessionVersion();
     const token = await secureTokenStore.getAccessToken();
+    if (version !== sessionVersion()) return;
     if (!token) {
       set({ status: 'signedOut' });
       return;
     }
     const user = await secureTokenStore.getUser<AuthUser>();
-    set({ user, status: 'signedIn' });
+    if (version === sessionVersion()) set({ user, status: 'signedIn' });
   },
 
   signIn: async (email, password) => {
+    invalidateSessionRequests();
+    disconnectSocket();
+    const version = sessionVersion();
+    await secureTokenStore.clear();
+    if (version !== sessionVersion()) return;
     set({ error: null });
     try {
       const { accessToken, refreshToken, user } = await authApi.login(email, password);
+      if (version !== sessionVersion()) return;
       await Promise.all([secureTokenStore.setTokens(accessToken, refreshToken), secureTokenStore.setUser(user)]);
-      set({ user, status: 'signedIn' });
+      if (version === sessionVersion()) set({ user, status: 'signedIn' });
     } catch (e: any) {
       const message = e?.response?.data?.message ?? 'Unable to sign in. Please try again.';
-      set({ error: message });
+      if (version === sessionVersion()) set({ error: message });
       throw e;
     }
   },
 
   signOut: async () => {
-    const refreshToken = await secureTokenStore.getRefreshToken();
+    const refresh = secureTokenStore.getRefreshToken();
+    invalidateSessionRequests();
     disconnectSocket();
-    await secureTokenStore.clear();
+    const cleared = secureTokenStore.clear();
     set({ user: null, status: 'signedOut' });
+    const [refreshToken] = await Promise.all([refresh, cleared]);
     if (refreshToken) {
       authApi.logout(refreshToken).catch(() => {
         // Best-effort server-side revoke; local session is already cleared.
@@ -61,5 +72,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
 // Wire the API client's 401-after-refresh-failure event to a real sign-out.
 registerSessionExpiredHandler(() => {
+  invalidateSessionRequests();
+  disconnectSocket();
+  void secureTokenStore.clear().catch(() => {});
   useAuthStore.setState({ user: null, status: 'signedOut' });
 });

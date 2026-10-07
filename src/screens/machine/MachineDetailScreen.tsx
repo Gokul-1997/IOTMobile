@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, RefreshControl } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -23,6 +23,8 @@ import { MachineTimeline } from '../../types/timeline';
 import { HourlyProductionPoint } from '../../types/chart';
 import { RootStackParamList } from '../../navigation/types';
 import { StmScreen } from '../../components/StmScreen';
+import { useAppActive } from '../../hooks/useAppActive';
+import { useIsFocused } from '@react-navigation/native';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MachineDetail'>;
 
@@ -47,6 +49,8 @@ const sinceIST = (iso: string) => {
  */
 export function MachineDetailScreen({ route }: Props) {
   const theme = useTheme();
+  const active = useAppActive();
+  const focused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { machineId, machineName } = route.params;
   const user = useAuthStore((s) => s.user);
@@ -79,11 +83,12 @@ export function MachineDetailScreen({ route }: Props) {
 
   useEffect(() => {
     if (!allowed) { setLoading(false); return; }
+    if (!active || !focused) return;
     (async () => { await Promise.all([load(), loadTimeline()]); setLoading(false); })();
     const a = setInterval(load, DETAIL_REFRESH_MS);
     const b = setInterval(loadTimeline, TIMELINE_REFRESH_MS);
     return () => { clearInterval(a); clearInterval(b); };
-  }, [allowed, load, loadTimeline]);
+  }, [allowed, active, focused, load, loadTimeline]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

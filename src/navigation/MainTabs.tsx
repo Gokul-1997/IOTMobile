@@ -1,6 +1,7 @@
+import { useAppActive } from '../hooks/useAppActive';
 import React, { useEffect, useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { useAuthStore } from '../store/authStore';
@@ -38,6 +39,7 @@ const BADGE_POLL_MS = 60_000;
  */
 export function MainTabs() {
   const theme = useTheme();
+  const active = useAppActive();
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const canAlarms = hasPermission(user, SCREEN_PERMISSION.alarms);
@@ -45,6 +47,7 @@ export function MainTabs() {
   const [activeAlarms, setActiveAlarms] = useState(0);
 
   useEffect(() => {
+    if (!active) return;
     let alive = true;
     const tick = () => {
       notificationsApi.getUnreadCount().then((n) => alive && setUnread(n)).catch(() => {});
@@ -56,7 +59,7 @@ export function MainTabs() {
     tick();
     const t = setInterval(tick, BADGE_POLL_MS);
     return () => { alive = false; clearInterval(t); };
-  }, [canAlarms]);
+  }, [canAlarms, active, user?.id]);
 
   const badge = (n: number) => (n > 0 ? (n > 99 ? '99+' : n) : undefined);
 
