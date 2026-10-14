@@ -78,6 +78,7 @@ export function DashboardScreen() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const requestRef = useRef<AbortController | null>(null);
+  const lastSnapshotAt = useRef(0);
   const visibleIds = useRef(new Set<number>());
   useEffect(() => { const timer = setTimeout(() => { setSearch(query.trim()); setPage(1); }, 300); return () => clearTimeout(timer); }, [query]);
 
@@ -126,12 +127,16 @@ export function DashboardScreen() {
       });
       setError(null);
       setLastUpdated(new Date());
+      lastSnapshotAt.current = Date.now();
     } catch (e: any) {
       if (request.signal.aborted || e?.code === 'ERR_CANCELED') return;
       const status = e?.response?.status;
       setError(status === 403 ? 'forbidden' : 'Cannot reach the server. Showing the last data received.');
     } finally {
-      if (requestRef.current === request && !request.signal.aborted) setLoading(false);
+      if (requestRef.current === request) {
+        requestRef.current = null;
+        if (!request.signal.aborted) setLoading(false);
+      }
     }
   }, [active, canSee, page, filter, search, user?.id]);
 
@@ -195,7 +200,11 @@ export function DashboardScreen() {
   useEffect(() => {
     if (!canSee || !active) return;
     const stop = onMachineUpdate(applySocketUpdate);
-    const stopConnected = onSocketConnected(() => { void fetchSilently(); });
+    const stopConnected = onSocketConnected(() => {
+      // The initial snapshot is already pending; do not download it again as the socket opens.
+      if (requestRef.current || Date.now() - lastSnapshotAt.current < 5_000) return;
+      void fetchSilently();
+    });
     void connectSocketQuietly();
     setMachineIds([...visibleIds.current]);
     return () => { stop(); stopConnected(); setMachineIds([]); };

@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { useColorScheme } from 'react-native';
+import { AccessibilityInfo, useColorScheme } from 'react-native';
 import { lightColors, darkColors, ColorScheme } from './colors';
 import { spacing, radius, typeScale, textScale, fontWeight, shadow } from './tokens';
 import { getPref, setPref } from '../store/prefs';
@@ -16,6 +16,7 @@ interface Theme {
   weight: typeof fontWeight;
   shadow: typeof shadow;
   isDark: boolean;
+  reduceMotion: boolean;
   /** The person's choice; "system" follows the phone. */
   mode: ThemeMode;
   setMode: (mode: ThemeMode) => void;
@@ -26,6 +27,13 @@ const ThemeContext = createContext<Theme | null>(null);
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const scheme = useColorScheme();
   const [mode, setModeState] = useState<ThemeMode>('system');
+  const [reduceMotion, setReduceMotion] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then(value => { if (alive) setReduceMotion(value); });
+    const listener = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => { alive = false; listener.remove(); };
+  }, []);
 
   // the saved choice, once on start
   useEffect(() => {
@@ -51,10 +59,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       weight: fontWeight,
       shadow,
       isDark,
+      reduceMotion,
       mode,
       setMode,
     }),
-    [isDark, mode, setMode]
+    [isDark, reduceMotion, mode, setMode]
   );
 
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;

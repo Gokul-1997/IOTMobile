@@ -16,6 +16,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export function RootNavigator() {
   const theme = useTheme();
   const status = useAuthStore((s) => s.status);
+  const authorizationVersion = useAuthStore((s) => s.authorizationVersion);
 
   const navTheme = {
     ...(theme.isDark ? DarkTheme : DefaultTheme),
@@ -35,14 +36,14 @@ export function RootNavigator() {
   }
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer key={authorizationVersion} theme={navTheme}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {status === 'signedIn' ? (
           <>
             <Stack.Screen name="Main" component={MainTabs} />
             {/* the app bar again, with a back button before the logo */}
             <Stack.Screen name="MachineDetail" component={MachineDetailScreen} options={({ navigation }) => ({
-              animation: 'slide_from_right',
+              animation: theme.reduceMotion ? 'none' : 'slide_from_right',
               headerShown: true,
               header: () => (
                 <AppBar onBack={() => navigation.goBack()} onProfile={() => navigation.navigate('Main', { screen: 'Profile' })} />
@@ -52,7 +53,7 @@ export function RootNavigator() {
         ) : (
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ animation: theme.reduceMotion ? 'none' : 'slide_from_right' }} />
           </>
         )}
       </Stack.Navigator>

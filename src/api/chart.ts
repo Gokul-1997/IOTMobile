@@ -4,10 +4,11 @@ import { ChartDataResponse } from '../types/chart';
 export async function getHourlyProduction(
   machineId: number,
   shiftId: number,
-  date: string
+  date: string,
+  signal?: AbortSignal
 ): Promise<ChartDataResponse> {
   const { data } = await apiClient.get<{ success: boolean; data: ChartDataResponse }>('/charts/data', {
-    params: { machine_id: machineId, shift_id: shiftId, date },
+    params: { machine_id: machineId, shift_id: shiftId, date }, signal,
   });
   return data.data;
 }

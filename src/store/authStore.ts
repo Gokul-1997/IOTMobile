@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import * as authApi from '../api/auth';
-import { registerSessionExpiredHandler } from '../api/client';
+import { registerSessionExpiredHandler, registerSessionRefreshedHandler } from '../api/client';
 import { secureTokenStore } from '../api/secureTokenStore';
 import { disconnectSocket } from '../api/socket';
 import { AuthUser } from '../types/auth';
@@ -10,6 +10,7 @@ interface AuthState {
   user: AuthUser | null;
   status: 'checking' | 'signedOut' | 'signedIn';
   error: string | null;
+  authorizationVersion: number;
   bootstrap: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -19,6 +20,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   status: 'checking',
   error: null,
+  authorizationVersion: 0,
 
   // Called once on app start: if a token exists we trust it optimistically —
   // the first authenticated API call will refresh/clear it if invalid.
@@ -76,4 +78,21 @@ registerSessionExpiredHandler(() => {
   disconnectSocket();
   void secureTokenStore.clear().catch(() => {});
   useAuthStore.setState({ user: null, status: 'signedOut' });
+});
+
+function authorizationKey(user: AuthUser): string {
+  return JSON.stringify([user.company_id, user.plant_id, user.user_type, user.is_snt_super,
+    [...(user.roles ?? [])].sort(), [...(user.permissions ?? [])].sort(),
+    Array.isArray(user.company_permissions) ? [...user.company_permissions].sort() : user.company_permissions]);
+}
+
+registerSessionRefreshedHandler((user, version) => {
+  const current = useAuthStore.getState();
+  if (version !== sessionVersion() || current.status !== 'signedIn' || current.user?.id !== user.id) return;
+  const changed = authorizationKey(current.user) !== authorizationKey(user);
+  if (changed) {
+    invalidateSessionRequests();
+    disconnectSocket();
+  }
+  useAuthStore.setState({ user, authorizationVersion: current.authorizationVersion + (changed ? 1 : 0) });
 });

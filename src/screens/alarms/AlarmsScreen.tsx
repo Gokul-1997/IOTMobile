@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, FlatList, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -12,6 +12,9 @@ import { Skeleton } from '../../components/Skeleton';
 import * as alarmsApi from '../../api/alarms';
 import { MachineAlarm } from '../../types/alarm';
 import { StmScreen } from '../../components/StmScreen';
+import { useIsFocused } from '@react-navigation/native';
+import { useAppActive } from '../../hooks/useAppActive';
+import { LatestRequest } from '../../api/latestRequest';
 
 const PAGE_LIMIT = 20;
 type View_ = 'active' | 'open' | 'resolved';
@@ -48,6 +51,11 @@ export function AlarmsScreen() {
   const user = useAuthStore((s) => s.user);
   const canSee = hasPermission(user, SCREEN_PERMISSION.alarms);
   const canResolve = hasPermission(user, SCREEN_PERMISSION.resolveAlarm);
+  const focused = useIsFocused();
+  const appActive = useAppActive();
+  const active = focused && appActive;
+  const request = useRef(new LatestRequest());
+  const loadingMore = useRef(false);
 
   const [view, setView] = useState<View_>('active');
   const [criticalOnly, setCriticalOnly] = useState(false);
@@ -69,8 +77,10 @@ export function AlarmsScreen() {
   }), [view, criticalOnly]);
 
   const load = useCallback(async (p = 1) => {
+    if (!active || !canSee) return;
     try {
-      const res = await alarmsApi.getAlarms(params(p));
+      const res = await request.current.run(signal => alarmsApi.getAlarms(params(p), signal), p === 1 ? 'replace' : 'reuse');
+      if (!res) return;
       setItems((prev) => (p === 1 ? res.data : [...prev, ...res.data]));
       setTotal(res.pagination.total);
       setPage(res.pagination.page);
@@ -79,19 +89,26 @@ export function AlarmsScreen() {
     } catch (e: any) {
       setError(e?.response?.status === 403 ? 'forbidden' : 'Cannot load alarms. Pull down to try again.');
     }
-  }, [params]);
+  }, [params, active, canSee]);
 
   useEffect(() => {
     if (!canSee) { setLoading(false); return; }
+    if (!active) return;
+    let alive = true;
     setLoading(true);
-    load(1).finally(() => setLoading(false));
-  }, [canSee, load]);
+    setItems([]); setPage(1); setPages(1); setConfirmId(null); setMore(false);
+    loadingMore.current = false;
+    load(1).finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; request.current.cancel(); };
+  }, [canSee, active, load]);
 
   const onRefresh = useCallback(async () => { setRefreshing(true); await load(1); setRefreshing(false); }, [load]);
   const loadMore = useCallback(async () => {
-    if (more || page >= pages) return;
-    setMore(true); await load(page + 1); setMore(false);
-  }, [more, page, pages, load]);
+    if (!active || loadingMore.current || loading || refreshing || page >= pages) return;
+    loadingMore.current = true;
+    setMore(true);
+    try { await load(page + 1); } finally { loadingMore.current = false; setMore(false); }
+  }, [active, loading, refreshing, page, pages, load]);
 
   const resolve = useCallback(async (id: number) => {
     setResolvingId(id);

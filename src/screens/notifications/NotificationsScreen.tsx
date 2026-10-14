@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, SectionList, RefreshControl, Pressable } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, SectionList, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useAuthStore } from '../../store/authStore';
 import { hasPermission, SCREEN_PERMISSION } from '../../auth/permissions';
@@ -11,6 +11,8 @@ import { Skeleton } from '../../components/Skeleton';
 import * as notificationsApi from '../../api/notifications';
 import { AppNotification } from '../../types/notification';
 import { StmScreen } from '../../components/StmScreen';
+import { LatestRequest } from '../../api/latestRequest';
+import { useAppActive } from '../../hooks/useAppActive';
 
 const IST = 330 * 60000;
 const dayOf = (iso: string) => new Date(new Date(iso).getTime() + IST).toISOString().slice(0, 10);
@@ -34,28 +36,55 @@ export function NotificationsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [more, setMore] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const request = useRef(new LatestRequest());
+  const loadingMore = useRef(false);
+  const focused = useIsFocused();
+  const appActive = useAppActive();
+  const active = focused && appActive;
 
-  const load = useCallback(async () => {
-    try { setItems(await notificationsApi.getNotifications()); setError(null); }
+  const load = useCallback(async (p = 1) => {
+    if (!active) return;
+    try {
+      const data = await request.current.run(signal => notificationsApi.getNotificationPage(p, signal), p === 1 ? 'replace' : 'reuse');
+      if (!data) return;
+      setItems(previous => p === 1 ? data.data : [...previous, ...data.data]);
+      setPage(data.pagination.page); setPages(data.pagination.totalPages || 1);
+      setUnread(data.unread_count); setError(null);
+    }
     catch { setError('Cannot load notifications. Pull down to try again.'); }
-  }, []);
-  useEffect(() => { load().finally(() => setLoading(false)); }, [load]);
+  }, [active]);
+  useEffect(() => {
+    if (!active) return;
+    let alive = true;
+    setLoading(true);
+    load().finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; request.current.cancel(); };
+  }, [load, active]);
   const onRefresh = useCallback(async () => { setRefreshing(true); await load(); setRefreshing(false); }, [load]);
-
-  const unread = items.filter((n) => !n.is_read).length;
+  const loadMore = useCallback(async () => {
+    if (!active || loading || refreshing || loadingMore.current || page >= pages) return;
+    loadingMore.current = true; setMore(true);
+    try { await load(page + 1); } finally { loadingMore.current = false; setMore(false); }
+  }, [active, loading, refreshing, page, pages, load]);
 
   const open = useCallback(async (n: AppNotification) => {
     if (!n.is_read) {
       setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x)));
-      notificationsApi.markRead(n.id).catch(() => {});
+      setUnread(n => Math.max(0, n - 1));
+      notificationsApi.markRead(n.id).catch(() => { void load(); });
     }
     const link = n.link || '';
     if (/^\/(alarms|alarm-report)/.test(link) && hasPermission(user, SCREEN_PERMISSION.alarms)) navigation.navigate('Alarms');
     else if (/^\/dashboard/.test(link) && hasPermission(user, SCREEN_PERMISSION.dashboard)) navigation.navigate('Dashboard');
-  }, [navigation, user]);
+  }, [navigation, user, load]);
 
   const markAll = useCallback(async () => {
     setItems((prev) => prev.map((x) => ({ ...x, is_read: true })));
+    setUnread(0);
     notificationsApi.markAllRead().catch(() => load());
   }, [load]);
 
@@ -79,6 +108,8 @@ export function NotificationsScreen() {
       <SectionList
         sections={loading ? [] : sections}
         keyExtractor={(n) => String(n.id)}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.4}
         stickySectionHeadersEnabled={false}
         contentContainerStyle={{ paddingBottom: theme.spacing.xxl }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.onField} />}
@@ -103,6 +134,7 @@ export function NotificationsScreen() {
           </Text>
         )}
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+        ListFooterComponent={more ? <ActivityIndicator style={{ margin: theme.spacing.lg }} color={theme.colors.accent} /> : null}
         renderItem={({ item: n }) => {
           const k = kind(n.type);
           return (

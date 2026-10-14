@@ -1,6 +1,7 @@
 import { useAppActive } from '../hooks/useAppActive';
 import React, { useEffect, useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useIsFocused } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
@@ -39,7 +40,9 @@ const BADGE_POLL_MS = 60_000;
  */
 export function MainTabs() {
   const theme = useTheme();
-  const active = useAppActive();
+  const appActive = useAppActive();
+  const focused = useIsFocused();
+  const active = appActive && focused;
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const canAlarms = hasPermission(user, SCREEN_PERMISSION.alarms);

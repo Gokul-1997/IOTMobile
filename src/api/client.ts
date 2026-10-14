@@ -2,7 +2,9 @@ import axios, { AxiosError, CanceledError, InternalAxiosRequestConfig } from 'ax
 import { API_BASE_URL } from './config';
 import { secureTokenStore } from './secureTokenStore';
 import { sessionVersion, sessionSignal } from './session';
-type SessionRequest = InternalAxiosRequestConfig & { _session?: number; _retried?: boolean };
+import { combineSignals } from './latestRequest';
+import type { AuthUser } from '../types/auth';
+type SessionRequest = InternalAxiosRequestConfig & { _session?: number; _retried?: boolean; _cleanupSignal?: () => void };
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -17,6 +19,11 @@ export function registerSessionExpiredHandler(handler: () => void) {
   onSessionExpired = handler;
 }
 
+let onSessionRefreshed: ((user: AuthUser, version: number) => void) | null = null;
+export function registerSessionRefreshedHandler(handler: (user: AuthUser, version: number) => void) {
+  onSessionRefreshed = handler;
+}
+
 export function expireSession(expectedVersion: number) {
   if (expectedVersion === sessionVersion()) onSessionExpired?.();
 }
@@ -26,9 +33,14 @@ apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) =>
   const version = request._session ?? sessionVersion();
   if (version !== sessionVersion()) throw new CanceledError('Session changed');
   request._session = version;
-  config.signal = config.signal ?? sessionSignal();
   const token = await secureTokenStore.getAccessToken();
   if (version !== sessionVersion()) throw new CanceledError('Session changed');
+  request._cleanupSignal?.();
+  if (config.signal && config.signal !== sessionSignal()) {
+    const combined = combineSignals(config.signal as AbortSignal, sessionSignal());
+    config.signal = combined.signal;
+    request._cleanupSignal = combined.cleanup;
+  } else config.signal = sessionSignal();
   if (token) {
     config.headers.set('Authorization', `Bearer ${token}`);
   }
@@ -47,7 +59,24 @@ async function refreshAccessToken(): Promise<string | null> {
     const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken }, { timeout: 15000, signal: sessionSignal() });
     const newAccessToken: string = data.accessToken;
     if (version !== sessionVersion()) return null;
+    const previous = await secureTokenStore.getUser<AuthUser>();
+    if (version !== sessionVersion()) return null;
+    const user = previous ? { ...previous } : null;
+    if (user) {
+      for (const field of ['permissions', 'company_permissions', 'roles'] as const) {
+        if (Array.isArray(data[field])) (user as any)[field] = data[field];
+      }
+      for (const field of ['company_id', 'plant_id', 'user_type', 'is_snt_super', 'auth_revision', 'company_name', 'plan'] as const) {
+        if (Object.prototype.hasOwnProperty.call(data, field)) (user as any)[field] = data[field];
+      }
+    }
     await secureTokenStore.setAccessToken(newAccessToken);
+    if (version !== sessionVersion()) return null;
+    if (user) {
+      await secureTokenStore.setUser(user);
+      if (version !== sessionVersion()) return null;
+      onSessionRefreshed?.(user, version);
+    }
     if (version !== sessionVersion()) return null;
     return newAccessToken;
   } catch (error) {
@@ -70,11 +99,13 @@ export function getRefreshedAccessToken(): Promise<string | null> {
 
 apiClient.interceptors.response.use(
   response => {
+    (response.config as SessionRequest)._cleanupSignal?.();
     if ((response.config as SessionRequest)._session !== sessionVersion()) throw new CanceledError('Session changed');
     return response;
   },
   async (error: AxiosError) => {
     const originalRequest = error.config as SessionRequest | undefined;
+    originalRequest?._cleanupSignal?.();
     if (originalRequest && originalRequest._session !== sessionVersion()) throw new CanceledError('Session changed');
 
     if (error.response?.status === 401 && originalRequest && !originalRequest._retried && !originalRequest.url?.startsWith('/auth/')) {

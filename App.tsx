@@ -6,7 +6,6 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { useAuthStore } from './src/store/authStore';
-import { registerForPushNotificationsAsync } from './src/api/pushNotifications';
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // No-op if already handled (e.g. fast refresh during development).
@@ -21,9 +20,6 @@ function AppShell() {
   useEffect(() => {
     (async () => {
       await bootstrap();
-      registerForPushNotificationsAsync().catch(() => {
-        // Non-fatal — user can be re-prompted from Settings later.
-      });
       setAppReady(true);
     })();
   }, [bootstrap]);

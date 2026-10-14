@@ -109,7 +109,7 @@ test('HTTP session expiry disconnects sockets and clears credentials', async () 
   };
   const { useAuthStore } = load('src/store/authStore.ts', {
     zustand: { create }, '../api/auth': {},
-    '../api/client': { registerSessionExpiredHandler: handler => { expired = handler; } },
+    '../api/client': { registerSessionExpiredHandler: handler => { expired = handler; }, registerSessionRefreshedHandler() {} },
     '../api/secureTokenStore': { secureTokenStore: { clear: async () => { cleared++; } } },
     '../api/socket': { disconnectSocket: () => { disconnected++; } },
     '../api/session': session
@@ -125,6 +125,7 @@ test('HTTP session expiry disconnects sockets and clears credentials', async () 
 function httpFixture() {
   const session = load('src/api/session.ts', {});
   let request, success, failure, expired = 0, writes = 0;
+  let user = { id: 7, roles: ['ADMIN'], company_id: 4, plant_id: 8, permissions: ['page:machines:view'], company_permissions: ['page:machines:view'] };
   let refresh = async () => ({ data: { accessToken: 'new-token' } });
   const api = Object.assign(async config => config, { interceptors: {
     request: { use: fn => { request = fn; } },
@@ -134,15 +135,114 @@ function httpFixture() {
   const axios = { create: () => api, post: (...args) => refresh(...args), isAxiosError: error => !!error.response };
   const client = load('src/api/client.ts', {
     axios: { __esModule: true, default: axios, CanceledError }, './config': { API_BASE_URL: 'unused' }, './session': session,
+    './latestRequest': load('src/api/latestRequest.ts', {}),
     './secureTokenStore': { secureTokenStore: {
       getAccessToken: async () => 'token', getRefreshToken: async () => 'refresh',
-      setAccessToken: async () => { writes++; }
+      setAccessToken: async () => { writes++; }, getUser: async () => user,
+      setUser: async next => { user = next; }
     } }
   });
   client.registerSessionExpiredHandler(() => { expired++; });
   return { session, client, request: config => request(config), success: response => success(response),
-    failure: error => failure(error), setRefresh: fn => { refresh = fn; }, writes: () => writes, expired: () => expired };
+    failure: error => failure(error), setRefresh: fn => { refresh = fn; }, writes: () => writes, expired: () => expired, user: () => user };
 }
+
+test('refresh persists current roles and scope, then announces the current user', async () => {
+  const f = httpFixture(); let notified;
+  f.client.registerSessionRefreshedHandler((user, version) => { notified = { user, version }; });
+  f.setRefresh(async () => ({ data: { accessToken: 'updated', roles: ['VIEWER'], company_id: 5, plant_id: null,
+    permissions: [], company_permissions: [], user_type: 'USER', is_snt_super: false, auth_revision: 3 } }));
+  assert.equal(await f.client.getRefreshedAccessToken(), 'updated');
+  assert.deepEqual(f.user(), { id: 7, roles: ['VIEWER'], company_id: 5, plant_id: null, permissions: [],
+    company_permissions: [], user_type: 'USER', is_snt_super: false, auth_revision: 3 });
+  assert.equal(notified.user, f.user()); assert.equal(notified.version, f.session.sessionVersion());
+});
+
+test('an older token-only refresh keeps current cached roles and scope', async () => {
+  const f = httpFixture(); const previous = { ...f.user() };
+  await f.client.getRefreshedAccessToken();
+  assert.deepEqual(f.user(), previous);
+});
+
+test('authorization refresh cancels the obsolete request while retaining the new session credentials', async () => {
+  const f = httpFixture();
+  const original = await f.request({ url: '/dashboard', headers: { set() {} } });
+  f.client.registerSessionRefreshedHandler(() => f.session.invalidateSessionRequests());
+  f.setRefresh(async () => ({ data: { accessToken: 'updated', roles: ['VIEWER'], plant_id: 9 } }));
+  assert.equal(await f.client.getRefreshedAccessToken(), null);
+  assert.equal(f.writes(), 1); assert.equal(f.user().plant_id, 9);
+  assert.throws(() => f.success({ config: original }), /Session changed/);
+  const current = await f.request({ url: '/dashboard', headers: { set() {} } });
+  assert.notEqual(current._session, original._session);
+  assert.equal(current.signal.aborted, false); assert.equal(f.expired(), 0);
+});
+
+test('server revocation refreshes a connected socket and cannot restart an intentional disconnect', async () => {
+  const f = fixture(); let refreshes = 0;
+  f.setRefresh(async () => { refreshes++; return 'revised-token'; });
+  const pending = f.socket.connectSocket(); await tick();
+  const socket = f.created[0]; socket.connectedNow(); await pending;
+  socket.connected = false; socket.emit('disconnect', 'io server disconnect');
+  socket.emit('connect_error', Object.assign(new Error('TOKEN_EXPIRED'), { data: { code: 'AUTH_REVISION_CHANGED' } }));
+  await tick();
+  assert.equal(refreshes, 1); assert.deepEqual(socket.auth, { token: 'revised-token' }); assert.equal(socket.attempts, 2);
+  f.socket.disconnectSocket(); socket.emit('disconnect', 'io server disconnect'); await tick();
+  assert.equal(refreshes, 1); assert.equal(socket.attempts, 2);
+});
+
+test('a server-disconnect refresh from a prior session cannot reconnect', async () => {
+  const f = fixture(); let release;
+  f.setRefresh(() => new Promise(resolve => { release = resolve; }));
+  const pending = f.socket.connectSocket(); await tick();
+  const socket = f.created[0]; socket.connectedNow(); await pending;
+  socket.connected = false; socket.emit('disconnect', 'io server disconnect');
+  f.session.invalidateSessionRequests(); f.socket.disconnectSocket();
+  release('obsolete-token'); await tick();
+  assert.equal(socket.attempts, 1); assert.equal(f.expired(), 0);
+});
+
+test('server-disconnect refresh retries a transient outage and logout cancels its timer', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture(); let refreshes = 0;
+  f.setRefresh(async () => { refreshes++; throw new Error('Network unavailable'); });
+  const pending = f.socket.connectSocket(); await tick();
+  const socket = f.created[0]; socket.connectedNow(); await pending;
+  socket.connected = false; socket.emit('disconnect', 'io server disconnect'); await tick();
+  assert.equal(refreshes, 1); assert.equal(f.expired(), 0);
+  t.mock.timers.tick(2000); await tick();
+  assert.equal(refreshes, 2);
+  f.socket.disconnectSocket(); t.mock.timers.tick(4000); await tick();
+  assert.equal(refreshes, 2); assert.equal(socket.attempts, 1);
+});
+
+test('refreshed authorization cancels old requests and resets native screen state once', () => {
+  let refreshed, disconnected = 0;
+  const session = load('src/api/session.ts', {});
+  const create = initializer => {
+    let state;
+    const set = next => { state = { ...state, ...next }; };
+    state = initializer(set, () => state);
+    return { setState: set, getState: () => state };
+  };
+  const { useAuthStore } = load('src/store/authStore.ts', {
+    zustand: { create }, '../api/auth': {},
+    '../api/client': { registerSessionExpiredHandler() {}, registerSessionRefreshedHandler: handler => { refreshed = handler; } },
+    '../api/secureTokenStore': { secureTokenStore: {} },
+    '../api/socket': { disconnectSocket: () => { disconnected++; } }, '../api/session': session
+  });
+  const user = { id: 7, company_id: 4, plant_id: 8, roles: ['ADMIN'], permissions: ['page:machines:view'], company_permissions: [] };
+  useAuthStore.setState({ status: 'signedIn', user });
+  const signal = session.sessionSignal(), version = session.sessionVersion();
+  const revised = { ...user, roles: ['VIEWER'], plant_id: 9 };
+  refreshed(revised, version);
+  assert.equal(signal.aborted, true); assert.equal(disconnected, 1);
+  assert.equal(useAuthStore.getState().authorizationVersion, 1);
+  assert.deepEqual(useAuthStore.getState().user, revised);
+  refreshed({ ...revised }, session.sessionVersion());
+  assert.equal(disconnected, 1); assert.equal(useAuthStore.getState().authorizationVersion, 1);
+  refreshed(user, version); // late callback from the old generation
+  assert.deepEqual(useAuthStore.getState().user, revised);
+});
 
 test('old HTTP responses and pending refreshes cannot enter a new session', async () => {
   const f = httpFixture();

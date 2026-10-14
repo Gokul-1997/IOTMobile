@@ -11,6 +11,7 @@ export interface AuthUser {
   roles: string[];
   permissions: string[];
   company_permissions?: unknown;
+  auth_revision?: number;
   plan: { plan_code: string; tier: string } | null;
 }
 

@@ -66,11 +66,11 @@ export function HourlyProductionChart({ data }: { data: HourlyProductionPoint[] 
       </View>
 
       <View
-        style={{ height: CHART_HEIGHT }}
+        style={{ height: CHART_HEIGHT + 20 }}
         onLayout={(e) => setChartWidth(e.nativeEvent.layout.width)}
       >
         {chartWidth > 0 && (
-          <Svg width={chartWidth} height={CHART_HEIGHT}>
+          <Svg width={chartWidth} height={CHART_HEIGHT + 20} accessible={false}>
             {/* Gridlines — hairline, recessive, one step off the surface */}
             {gridSteps.map((g) => (
               <Line
@@ -126,11 +126,14 @@ export function HourlyProductionChart({ data }: { data: HourlyProductionPoint[] 
 
         {/* Transparent tap targets — bigger than the bar itself, per the
             skill's "hit target bigger than the mark" rule */}
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, flexDirection: 'row' }}>
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: CHART_HEIGHT, flexDirection: 'row' }}>
           {data.map((d, i) => (
             <Pressable
               key={d.hour}
               style={{ flex: 1 }}
+              accessibilityRole="button"
+              accessibilityLabel={`${d.produced} parts at ${d.hour}`}
+              accessibilityState={{ selected: i === activeIndex }}
               onPress={() => setSelected(selected === i ? null : i)}
             />
           ))}

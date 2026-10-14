@@ -11,8 +11,8 @@ export interface GetAlarmsParams {
   limit?: number;
 }
 
-export async function getAlarms(params: GetAlarmsParams = {}): Promise<AlarmsResponse> {
-  const { data } = await apiClient.get<AlarmsResponse>('/alarms', { params });
+export async function getAlarms(params: GetAlarmsParams = {}, signal?: AbortSignal): Promise<AlarmsResponse> {
+  const { data } = await apiClient.get<AlarmsResponse>('/alarms', { params, signal });
   return data;
 }
 

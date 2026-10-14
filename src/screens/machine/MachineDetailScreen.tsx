@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, RefreshControl } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,11 +25,13 @@ import { RootStackParamList } from '../../navigation/types';
 import { StmScreen } from '../../components/StmScreen';
 import { useAppActive } from '../../hooks/useAppActive';
 import { useIsFocused } from '@react-navigation/native';
+import { LatestRequest } from '../../api/latestRequest';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MachineDetail'>;
 
 const DETAIL_REFRESH_MS = 15_000;
 const TIMELINE_REFRESH_MS = 60_000;
+const CHART_REFRESH_MS = 60_000;
 const FEED_SCALE = 6000;
 
 function todayIST(): string {
@@ -62,37 +64,63 @@ export function MachineDetailScreen({ route }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const detailRequest = useRef(new LatestRequest());
+  const timelineRequest = useRef(new LatestRequest());
+  const chartRequest = useRef(new LatestRequest());
+  const lastChart = useRef({ key: '', at: 0 });
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    setDetail(null); setTimeline(null); setChartData(null); setError(null); setLoading(true);
+    lastChart.current = { key: '', at: 0 };
+  }, [machineId]);
+
+  const load = useCallback(async (forceChart = false) => {
     try {
-      const data = await machineDetailApi.getMachineDetail(machineId);
+      const data = await detailRequest.current.run(signal => machineDetailApi.getMachineDetail(machineId, signal));
+      if (!data) return;
       setDetail(data);
       setError(null);
       if (data.shift?.id != null) {
-        chartApi.getHourlyProduction(machineId, data.shift.id, todayIST())
-          .then((c) => setChartData(c.hourlyCount)).catch(() => setChartData(null));
-      }
+        const shiftId = data.shift.id, date = todayIST();
+        const key = `${machineId}:${shiftId}:${date}`;
+        if (forceChart || lastChart.current.key !== key || Date.now() - lastChart.current.at >= CHART_REFRESH_MS) {
+          if (lastChart.current.key !== key) { chartRequest.current.cancel(); setChartData(null); }
+          lastChart.current.key = key;
+          void chartRequest.current.run(signal => chartApi.getHourlyProduction(machineId, shiftId, date, signal))
+            .then(c => {
+              if (!c) return;
+              lastChart.current = { key, at: Date.now() }; setChartData(c.hourlyCount);
+            }).catch(() => { setChartData(null); });
+        }
+      } else { chartRequest.current.cancel(); setChartData(null); lastChart.current = { key: '', at: 0 }; }
     } catch (e: any) {
       setError(e?.response?.status === 403 ? 'forbidden' : 'Cannot load this machine. Pull down to try again.');
     }
   }, [machineId]);
 
   const loadTimeline = useCallback(async () => {
-    try { setTimeline(await machineDetailApi.getMachineTimeline(machineId)); } catch { /* the rest of the page stands without it */ }
+    try {
+      const data = await timelineRequest.current.run(signal => machineDetailApi.getMachineTimeline(machineId, signal));
+      if (data) setTimeline(data);
+    } catch { /* the rest of the page stands without it */ }
   }, [machineId]);
 
   useEffect(() => {
     if (!allowed) { setLoading(false); return; }
     if (!active || !focused) return;
-    (async () => { await Promise.all([load(), loadTimeline()]); setLoading(false); })();
+    let alive = true;
+    (async () => { await Promise.all([load(), loadTimeline()]); if (alive) setLoading(false); })();
     const a = setInterval(load, DETAIL_REFRESH_MS);
     const b = setInterval(loadTimeline, TIMELINE_REFRESH_MS);
-    return () => { clearInterval(a); clearInterval(b); };
+    return () => {
+      alive = false; clearInterval(a); clearInterval(b);
+      detailRequest.current.cancel(); timelineRequest.current.cancel(); chartRequest.current.cancel();
+    };
   }, [allowed, active, focused, load, loadTimeline]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([load(), loadTimeline()]);
+    await Promise.all([load(true), loadTimeline()]);
     setRefreshing(false);
   }, [load, loadTimeline]);
 

@@ -1,7 +1,7 @@
 import { apiClient } from './client';
 import { AppNotification } from '../types/notification';
 
-interface NotificationsResponse {
+export interface NotificationsResponse {
   success: boolean;
   data: AppNotification[];
   unread_count: number;
@@ -11,6 +11,11 @@ interface NotificationsResponse {
 export async function getNotifications(): Promise<AppNotification[]> {
   const { data } = await apiClient.get<NotificationsResponse>('/notifications');
   return data.data;
+}
+
+export async function getNotificationPage(page = 1, signal?: AbortSignal): Promise<NotificationsResponse> {
+  const { data } = await apiClient.get<NotificationsResponse>('/notifications', { params: { page, limit: 25 }, signal });
+  return data;
 }
 
 export async function getUnreadCount(): Promise<number> {

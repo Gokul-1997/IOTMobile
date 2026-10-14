@@ -11,7 +11,7 @@ interface TextFieldProps extends TextInputProps {
   secureToggle?: boolean;
 }
 
-export function TextField({ label, error, secureToggle, secureTextEntry, ...rest }: TextFieldProps) {
+export function TextField({ label, error, secureToggle, secureTextEntry, onFocus, onBlur, ...rest }: TextFieldProps) {
   const theme = useTheme();
   const [focused, setFocused] = useState(false);
   const [hidden, setHidden] = useState(!!secureTextEntry);
@@ -45,9 +45,11 @@ export function TextField({ label, error, secureToggle, secureTextEntry, ...rest
       >
         <TextInput
           {...rest}
+          accessibilityLabel={rest.accessibilityLabel ?? label}
+          accessibilityHint={error || rest.accessibilityHint}
           secureTextEntry={secureToggle ? hidden : secureTextEntry}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onFocus={event => { setFocused(true); onFocus?.(event); }}
+          onBlur={event => { setFocused(false); onBlur?.(event); }}
           placeholderTextColor={theme.colors.textMuted}
           style={[
             styles.input,
@@ -55,7 +57,9 @@ export function TextField({ label, error, secureToggle, secureTextEntry, ...rest
           ]}
         />
         {secureToggle && (
-          <Pressable onPress={() => setHidden((v) => !v)} hitSlop={10}>
+          <Pressable onPress={() => setHidden((v) => !v)} accessibilityRole="button"
+            accessibilityLabel={hidden ? 'Show password' : 'Hide password'}
+            style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
             <Ionicons
               name={hidden ? 'eye-outline' : 'eye-off-outline'}
               size={20}
@@ -65,7 +69,7 @@ export function TextField({ label, error, secureToggle, secureTextEntry, ...rest
         )}
       </View>
       {error ? (
-        <Text style={{ color: theme.colors.danger, fontSize: theme.type.caption, marginTop: theme.spacing.xs }}>
+        <Text accessibilityRole="alert" style={{ color: theme.colors.danger, fontSize: theme.type.caption, marginTop: theme.spacing.xs }}>
           {error}
         </Text>
       ) : null}

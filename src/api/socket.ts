@@ -16,6 +16,7 @@ let connecting: Promise<void> | null = null;
 let cancelConnect: (() => void) | undefined;
 let generation = 0;
 let refreshing = false;
+let authRetryTimer: ReturnType<typeof setTimeout> | undefined;
 let machineIds: number[] = [];
 const connectedListeners = new Set<() => void>();
 const listeners = new Set<(data: MachineUpdatePayload) => void>();
@@ -35,19 +36,14 @@ export function connectSocket(): Promise<void> {
         reconnectionAttempts: Infinity, reconnectionDelay: 2000,
         reconnectionDelayMax: 30000, randomizationFactor: 0.5, auth: { token }
       });
-      s.on('connect', () => { if (socket === s) { refreshing = false; s.emit('subscribeMachines', machineIds); for (const callback of connectedListeners) callback(); } });
+      s.on('connect', () => { if (socket === s) { clearTimeout(authRetryTimer); refreshing = false; s.emit('subscribeMachines', machineIds); for (const callback of connectedListeners) callback(); } });
       s.on('machineUpdate', data => { for (const callback of listeners) callback(data); });
-      s.on('connect_error', async error => {
+      s.on('disconnect', reason => {
+        if (reason === 'io server disconnect' && socket === s) void refreshAndReconnect(s, session);
+      });
+      s.on('connect_error', error => {
         if (socket === s && session === sessionVersion() && error.message === 'Unauthorized') { expireSession(session); return; }
-        if (error.message !== 'TOKEN_EXPIRED' || refreshing || socket !== s) return;
-        refreshing = true;
-        try {
-          const token = await getRefreshedAccessToken();
-          if (socket !== s || session !== sessionVersion()) return;
-          if (token) { s.auth = { token }; s.connect(); }
-          else { cancelConnect?.(); expireSession(session); }
-        } catch { cancelConnect?.(); }
-        finally { if (socket === s) refreshing = false; }
+        if (error.message === 'TOKEN_EXPIRED' || (error as Error & { data?: { code?: string } }).data?.code === 'AUTH_REVISION_CHANGED') void refreshAndReconnect(s, session);
       });
     }
     const s = socket;
@@ -71,6 +67,22 @@ export function connectSocket(): Promise<void> {
   return pending;
 }
 
+async function refreshAndReconnect(s: Socket, session: number): Promise<void> {
+  if (refreshing || socket !== s || session !== sessionVersion()) return;
+  refreshing = true;
+  clearTimeout(authRetryTimer);
+  try {
+    const token = await getRefreshedAccessToken();
+    if (socket !== s || session !== sessionVersion()) return;
+    if (token) { s.auth = { token }; s.connect(); }
+    else { cancelConnect?.(); expireSession(session); }
+  } catch {
+    if (socket !== s || session !== sessionVersion()) return;
+    cancelConnect?.();
+    authRetryTimer = setTimeout(() => void refreshAndReconnect(s, session), 2000);
+  } finally { if (socket === s) refreshing = false; }
+}
+
 export function onSocketConnected(callback: () => void): () => void {
   connectedListeners.add(callback);
   return () => { connectedListeners.delete(callback); };
@@ -85,6 +97,7 @@ export function onMachineUpdate(callback: (data: MachineUpdatePayload) => void):
 }
 export function disconnectSocket(): void {
   generation++;
+  clearTimeout(authRetryTimer);
   cancelConnect?.();
   socket?.removeAllListeners(); socket?.disconnect();
   socket = null; connecting = null; refreshing = false; machineIds = [];
