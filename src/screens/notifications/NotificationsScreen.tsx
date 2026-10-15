@@ -13,6 +13,7 @@ import { AppNotification } from '../../types/notification';
 import { StmScreen } from '../../components/StmScreen';
 import { LatestRequest } from '../../api/latestRequest';
 import { useAppActive } from '../../hooks/useAppActive';
+import { onUnreadCount } from '../../api/socket';
 
 const IST = 330 * 60000;
 const dayOf = (iso: string) => new Date(new Date(iso).getTime() + IST).toISOString().slice(0, 10);
@@ -40,6 +41,8 @@ export function NotificationsScreen() {
   const [pages, setPages] = useState(1);
   const [more, setMore] = useState(false);
   const [unread, setUnread] = useState(0);
+  const latestUnread = useRef(unread);
+  latestUnread.current = unread;
   const request = useRef(new LatestRequest());
   const loadingMore = useRef(false);
   const focused = useIsFocused();
@@ -57,6 +60,20 @@ export function NotificationsScreen() {
     }
     catch { setError('Cannot load notifications. Pull down to try again.'); }
   }, [active]);
+  useEffect(() => {
+    if (!active) return;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    const stop = onUnreadCount(count => {
+      const changed = latestUnread.current !== count;
+      latestUnread.current = count;
+      setUnread(count);
+      if (changed && page === 1) {
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(() => { void load(); }, 250);
+      }
+    });
+    return () => { stop(); clearTimeout(refreshTimer); };
+  }, [active, page, load]);
   useEffect(() => {
     if (!active) return;
     let alive = true;
@@ -161,7 +178,7 @@ export function NotificationsScreen() {
         }}
         ListEmptyComponent={loading ? null : error
           ? <EmptyState icon="cloud-offline-outline" tone="danger" title="Notifications not loaded" message={error} actionLabel="Try again" onAction={onRefresh} />
-          : <EmptyState icon="notifications-off-outline" title="No notifications yet" message="Alarms and program transfers you follow appear here. Choose which in Settings on the web app." />}
+          : <EmptyState icon="notifications-off-outline" title="No notifications yet" message="Configured alarm alerts and program upload or backup results appear here." />}
       />
     </StmScreen>
   );

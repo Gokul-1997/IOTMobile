@@ -47,6 +47,25 @@ test('logout invalidates socket creation while token storage is pending', async 
   assert.equal(f.created.length, 0);
 });
 
+test('alarm unread counts use one live listener and reject malformed or old-session events', async () => {
+  const f = fixture();
+  const seen = [];
+  const stop = f.socket.onUnreadCount(count => seen.push(count));
+  const attempt = f.socket.connectSocket();
+  await tick();
+  f.created[0].connectedNow(); await attempt;
+  const oldSocket = f.created[0];
+  for (const count of [3, -1, 2.5, '4', null, 0]) oldSocket.emit('unreadCount', { count });
+  assert.deepEqual(seen, [3, 0]);
+  stop();
+  oldSocket.emit('unreadCount', { count: 8 });
+  assert.deepEqual(seen, [3, 0]);
+  f.socket.onUnreadCount(count => seen.push(count));
+  f.socket.disconnectSocket();
+  oldSocket.emit('unreadCount', { count: 9 });
+  assert.deepEqual(seen, [3, 0]);
+});
+
 test('concurrent connects share a promise and each subscriber owns its cleanup', async () => {
   const f = fixture();
   const a = [], b = [];

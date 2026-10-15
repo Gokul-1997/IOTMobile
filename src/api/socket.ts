@@ -20,6 +20,7 @@ let authRetryTimer: ReturnType<typeof setTimeout> | undefined;
 let machineIds: number[] = [];
 const connectedListeners = new Set<() => void>();
 const listeners = new Set<(data: MachineUpdatePayload) => void>();
+const unreadListeners = new Set<(count: number) => void>();
 
 export function connectSocket(): Promise<void> {
   if (socket?.connected) return Promise.resolve();
@@ -38,6 +39,12 @@ export function connectSocket(): Promise<void> {
       });
       s.on('connect', () => { if (socket === s) { clearTimeout(authRetryTimer); refreshing = false; s.emit('subscribeMachines', machineIds); for (const callback of connectedListeners) callback(); } });
       s.on('machineUpdate', data => { for (const callback of listeners) callback(data); });
+      s.on('unreadCount', payload => {
+        if (socket !== s || session !== sessionVersion()) return;
+        const count = payload?.count;
+        if (!Number.isSafeInteger(count) || count < 0) return;
+        for (const callback of unreadListeners) callback(count);
+      });
       s.on('disconnect', reason => {
         if (reason === 'io server disconnect' && socket === s) void refreshAndReconnect(s, session);
       });
@@ -95,13 +102,17 @@ export function onMachineUpdate(callback: (data: MachineUpdatePayload) => void):
   listeners.add(callback);
   return () => { listeners.delete(callback); };
 }
+export function onUnreadCount(callback: (count: number) => void): () => void {
+  unreadListeners.add(callback);
+  return () => { unreadListeners.delete(callback); };
+}
 export function disconnectSocket(): void {
   generation++;
   clearTimeout(authRetryTimer);
   cancelConnect?.();
   socket?.removeAllListeners(); socket?.disconnect();
   socket = null; connecting = null; refreshing = false; machineIds = [];
-  listeners.clear(); connectedListeners.clear();
+  listeners.clear(); connectedListeners.clear(); unreadListeners.clear();
 }
 export async function connectSocketQuietly(): Promise<boolean> {
   try { await connectSocket(); return true; } catch { return false; }

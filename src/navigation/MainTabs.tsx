@@ -14,6 +14,7 @@ import { NotificationsScreen } from '../screens/notifications/NotificationsScree
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
 import * as notificationsApi from '../api/notifications';
 import * as alarmsApi from '../api/alarms';
+import { connectSocketQuietly, onUnreadCount } from '../api/socket';
 
 export type MainTabParamList = {
   Dashboard: undefined;
@@ -36,7 +37,8 @@ const BADGE_POLL_MS = 60_000;
 /*
  * The four places of the app. Alarms is there only for a role that may see
  * alarms — the web app's rule — and carries the count of alarms active right
- * now; Notifications carries the unread count. Both refresh every minute.
+ * now; Notifications carries the unread count, updated over the shared live
+ * connection. The minute refresh also recovers counts after a network gap.
  */
 export function MainTabs() {
   const theme = useTheme();
@@ -52,8 +54,14 @@ export function MainTabs() {
   useEffect(() => {
     if (!active) return;
     let alive = true;
+    let liveChanges = 0;
+    const stopUnread = onUnreadCount(n => { if (alive) { liveChanges++; setUnread(n); } });
+    void connectSocketQuietly();
     const tick = () => {
-      notificationsApi.getUnreadCount().then((n) => alive && setUnread(n)).catch(() => {});
+      const requestedAt = liveChanges;
+      notificationsApi.getUnreadCount().then((n) => {
+        if (alive && requestedAt === liveChanges) setUnread(n);
+      }).catch(() => {});
       if (canAlarms) {
         alarmsApi.getAlarms({ active: true, is_resolved: false, limit: 1 })
           .then((r) => alive && setActiveAlarms(r.pagination.total)).catch(() => {});
@@ -61,7 +69,7 @@ export function MainTabs() {
     };
     tick();
     const t = setInterval(tick, BADGE_POLL_MS);
-    return () => { alive = false; clearInterval(t); };
+    return () => { alive = false; stopUnread(); clearInterval(t); };
   }, [canAlarms, active, user?.id]);
 
   const badge = (n: number) => (n > 0 ? (n > 99 ? '99+' : n) : undefined);
