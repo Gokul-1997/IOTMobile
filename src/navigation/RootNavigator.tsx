@@ -8,6 +8,7 @@ import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 import { BootstrapScreen } from '../screens/BootstrapScreen';
 import { MachineDetailScreen } from '../screens/machine/MachineDetailScreen';
 import { MainTabs } from './MainTabs';
+import { ProfileScreen } from '../screens/profile/ProfileScreen';
 import { AppBar } from '../components/AppBar';
 import { RootStackParamList } from './types';
 
@@ -41,12 +42,17 @@ export function RootNavigator() {
         {status === 'signedIn' ? (
           <>
             <Stack.Screen name="Main" component={MainTabs} />
+            <Stack.Screen name="Profile" component={ProfileScreen} options={({ navigation }) => ({
+              animation: theme.reduceMotion ? 'none' : 'slide_from_right',
+              headerShown: true,
+              header: () => <AppBar profileActive onBack={() => navigation.goBack()} />,
+            })} />
             {/* the app bar again, with a back button before the logo */}
             <Stack.Screen name="MachineDetail" component={MachineDetailScreen} options={({ navigation }) => ({
               animation: theme.reduceMotion ? 'none' : 'slide_from_right',
               headerShown: true,
               header: () => (
-                <AppBar onBack={() => navigation.goBack()} onProfile={() => navigation.navigate('Main', { screen: 'Profile' })} />
+                <AppBar onBack={() => navigation.goBack()} onProfile={() => navigation.navigate('Profile')} />
               ),
             })} />
           </>

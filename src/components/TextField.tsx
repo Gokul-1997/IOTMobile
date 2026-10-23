@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TextInputProps, Pressable } from 'react-native';
+import { View, TextInput, StyleSheet, TextInputProps, Pressable } from 'react-native';
+import { ThemeText as Text } from './ThemeText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '../theme/ThemeProvider';
 
@@ -53,7 +54,7 @@ export function TextField({ label, error, secureToggle, secureTextEntry, onFocus
           placeholderTextColor={theme.colors.textMuted}
           style={[
             styles.input,
-            { color: theme.colors.textPrimary, fontSize: theme.type.body },
+            { color: theme.colors.textPrimary, fontSize: theme.type.body, fontFamily: theme.font.regular },
           ]}
         />
         {secureToggle && (

@@ -1,7 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, useColorScheme } from 'react-native';
+import { useFonts } from 'expo-font';
 import { lightColors, darkColors, ColorScheme } from './colors';
-import { spacing, radius, typeScale, textScale, fontWeight, shadow } from './tokens';
+import { spacing, radius, typeScale, textScale, fontWeight, fontFamily, shadow } from './tokens';
 import { getPref, setPref } from '../store/prefs';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
@@ -14,6 +15,7 @@ interface Theme {
   type: typeof typeScale;
   textScale: typeof textScale;
   weight: typeof fontWeight;
+  font: { regular: string | undefined; medium: string | undefined; bold: string | undefined };
   shadow: typeof shadow;
   isDark: boolean;
   reduceMotion: boolean;
@@ -25,6 +27,11 @@ interface Theme {
 const ThemeContext = createContext<Theme | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [fontsLoaded, fontError] = useFonts({
+    [fontFamily.regular]: require('../../assets/fonts/Ubuntu-Regular.ttf'),
+    [fontFamily.medium]: require('../../assets/fonts/Ubuntu-Medium.ttf'),
+    [fontFamily.bold]: require('../../assets/fonts/Ubuntu-Bold.ttf'),
+  });
   const scheme = useColorScheme();
   const [mode, setModeState] = useState<ThemeMode>('system');
   const [reduceMotion, setReduceMotion] = useState(true);
@@ -37,9 +44,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // the saved choice, once on start
   useEffect(() => {
+    let alive = true;
     getPref(MODE_KEY).then(v => {
-      if (v === 'light' || v === 'dark' || v === 'system') setModeState(v);
+      if (alive && (v === 'light' || v === 'dark' || v === 'system')) setModeState(v);
     });
+    return () => { alive = false; };
   }, []);
 
   const setMode = useCallback((m: ThemeMode) => {
@@ -57,14 +66,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       type: typeScale,
       textScale,
       weight: fontWeight,
-      shadow,
+      font: fontsLoaded ? fontFamily : { regular: undefined, medium: undefined, bold: undefined },
+      shadow: isDark ? {
+        card: { ...shadow.card, shadowColor: '#000000', shadowOpacity: 0.35 },
+        raised: { ...shadow.raised, shadowColor: '#000000', shadowOpacity: 0.3 },
+      } : shadow,
       isDark,
       reduceMotion,
       mode,
       setMode,
     }),
-    [isDark, reduceMotion, mode, setMode]
+    [isDark, reduceMotion, mode, setMode, fontsLoaded]
   );
+
+  // Keep the existing splash visible while bundled fonts load. A font failure
+  // falls back to the system font so sign-in always remains available.
+  if (!fontsLoaded && !fontError) return null;
 
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
 }

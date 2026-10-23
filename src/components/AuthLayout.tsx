@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, ScrollView, KeyboardAvoidingView } from 'react-native';
+import { View, ScrollView, KeyboardAvoidingView } from 'react-native';
+import { ThemeText as Text } from './ThemeText';
 import { StmScreen } from './StmScreen';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

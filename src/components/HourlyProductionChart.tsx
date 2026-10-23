@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Pressable } from 'react-native';
+import { ThemeText as Text } from './ThemeText';
 import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
 import { useTheme } from '../theme/ThemeProvider';
 import { HourlyProductionPoint } from '../types/chart';
@@ -112,6 +113,7 @@ export function HourlyProductionChart({ data }: { data: HourlyProductionPoint[] 
                       x={x + barWidth / 2}
                       y={CHART_HEIGHT + 14}
                       fontSize={10}
+                      fontFamily={theme.font.regular}
                       fill={theme.colors.textMuted}
                       textAnchor="middle"
                     >

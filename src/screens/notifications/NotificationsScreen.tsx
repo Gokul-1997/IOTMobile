@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, SectionList, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
+import { View, SectionList, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
+import { ThemeText as Text } from '../../components/ThemeText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeProvider';

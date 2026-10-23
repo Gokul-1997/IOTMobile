@@ -5,20 +5,17 @@ import { useTheme } from '../theme/ThemeProvider';
 
 /*
  * The STM MEXA mark exactly as the web app draws it — navy STM over the MEXA
- * gradient — and never recoloured for a theme. Where the ground is not white
- * (the dark theme; pass `plate` on the STM field) it sits on a white plate,
- * the tile its original colours need; on white it stands bare, so it lines
- * up with the text under it. The plate's proportions match the dark splash
- * screen (assets/splash-icon-dark.png).
+ * gradient. As on the web, STM turns white in dark mode and MEXA keeps its
+ * original gradient. An explicit plate remains available on brand artwork.
  */
 export function BrandLogo({ width = 84, plate }: { width?: number; plate?: boolean }) {
   const theme = useTheme();
-  const onPlate = plate ?? theme.isDark;
+  const onPlate = plate ?? false;
   return (
     <View accessible accessibilityRole="image" accessibilityLabel="STM MEXA"
       style={onPlate ? { backgroundColor: '#ffffff', borderRadius: Math.round(width * 0.083),
         paddingHorizontal: Math.round(width * 0.117), paddingVertical: Math.round(width * 0.1) } : undefined}>
-      <StmMexaLogo width={width} />
+      <StmMexaLogo width={width} onDark={theme.isDark && !onPlate} />
     </View>
   );
 }
@@ -37,13 +34,12 @@ export function BrandLogo({ width = 84, plate }: { width?: number; plate?: boole
 /*
  * The MEXA letters referenced a fixed gradient id ("mexaGrad") while the
  * gradient itself was declared under a per-instance id, so they painted with
- * nothing: every screen showed "STM" alone. There is one colouring only —
- * the original: a white or light-STM version is not the brand's mark, so a
- * dark or coloured background puts the mark on its plate (BrandLogo).
+ * nothing: every screen showed "STM" alone. The gradient reference must
+ * stay scoped to this instance in either theme.
  */
-export function StmMexaLogo({ width = 123 }: { width?: number }) {
+export function StmMexaLogo({ width = 123, onDark = false }: { width?: number; onDark?: boolean }) {
   const height = (width / 246) * 88;
-  const stmColor = '#102B4E';
+  const stmColor = onDark ? '#ffffff' : '#102B4E';
   // useId() yields ids like ":r1:" — not valid inside url(#…) everywhere
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const gradientId = `mexaGrad-${uid}`;

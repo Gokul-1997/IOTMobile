@@ -1,5 +1,6 @@
 import React from 'react';
-import { ScrollView, Pressable, Text, View } from 'react-native';
+import { ScrollView, Pressable, View } from 'react-native';
+import { ThemeText as Text } from './ThemeText';
 import { useTheme } from '../theme/ThemeProvider';
 
 export interface FilterChip { key: string; label: string; count?: number; dot?: string }

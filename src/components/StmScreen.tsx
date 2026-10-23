@@ -16,7 +16,7 @@ export function StmScreen({ children, style }: { children: React.ReactNode; styl
     <View style={[{ flex: 1, backgroundColor: theme.colors.field[3] }, style]}>
       <LinearGradient
         colors={theme.colors.field}
-        locations={[0, 0.36, 0.7, 1]}
+        locations={theme.colors.fieldLocations}
         start={{ x: 1, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}

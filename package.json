@@ -32,13 +32,16 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
+    "test": "node --test tests/*.test.cjs",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test:realtime": "node --test tests/realtime.test.cjs",
-    "test:requests": "node --test tests/request-lifecycle.test.cjs"
+    "test:requests": "node --test tests/request-lifecycle.test.cjs",
+    "test:assistant": "node --test tests/assistant.test.cjs",
+    "test:access": "node --test tests/navigation-access.test.cjs"
   },
   "private": true,
   "overrides": {

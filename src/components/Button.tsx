@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, Text, ActivityIndicator, ViewStyle, View } from 'react-native';
+import { Pressable, ActivityIndicator, ViewStyle, View } from 'react-native';
+import { ThemeText as Text } from './ThemeText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '../theme/ThemeProvider';
 
@@ -24,7 +25,7 @@ export function Button({ label, onPress, variant = 'primary', icon, loading, dis
   const off = disabled || loading;
   const fill =
     variant === 'primary' ? theme.colors.primary :
-    variant === 'danger' ? theme.colors.danger :
+    variant === 'danger' ? theme.colors.dangerFill :
     variant === 'onField' ? theme.colors.fieldButton : 'transparent';
   const ink =
     variant === 'primary' ? theme.colors.onPrimary :

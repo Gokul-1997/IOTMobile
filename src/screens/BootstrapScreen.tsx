@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, ActivityIndicator, Text } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
+import { ThemeText as Text } from '../components/ThemeText';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../theme/ThemeProvider';
 import { BrandLogo } from '../components/StmMexaLogo';

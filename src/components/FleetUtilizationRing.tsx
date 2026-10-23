@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, AccessibilityInfo } from 'react-native';
+import { View, AccessibilityInfo } from 'react-native';
+import { ThemeText as Text } from './ThemeText';
 import Svg, { Circle } from 'react-native-svg';
 import { useTheme } from '../theme/ThemeProvider';
 

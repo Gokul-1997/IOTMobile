@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View } from 'react-native';
+import { ThemeText as Text } from './ThemeText';
 import { useTheme } from '../theme/ThemeProvider';
 import { StatusKey, statusColors } from '../theme/colors';
 

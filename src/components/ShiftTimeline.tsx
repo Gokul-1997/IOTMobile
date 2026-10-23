@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, Pressable, LayoutChangeEvent } from 'react-native';
+import { View, Pressable, LayoutChangeEvent } from 'react-native';
+import { ThemeText as Text } from './ThemeText';
 import Svg, { Rect, Defs, Pattern, Line } from 'react-native-svg';
 import { useTheme } from '../theme/ThemeProvider';
 import { MachineTimeline, TimelineState } from '../types/timeline';

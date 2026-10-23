@@ -46,6 +46,12 @@ export const fontWeight = {
   heavy: '800',
 } as const;
 
+export const fontFamily = {
+  regular: 'Ubuntu-Regular',
+  medium: 'Ubuntu-Medium',
+  bold: 'Ubuntu-Bold',
+} as const;
+
 export const shadow = {
   // cards float on the STM field, as on the web: a soft lift, no outline
   card: {
@@ -62,4 +68,4 @@ export const shadow = {
     shadowRadius: 16,
     elevation: 6,
   },
-} as const;
+};

@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, Pressable, TextInput } from 'react-native';
+import { View, Pressable, TextInput } from 'react-native';
+import { ThemeText as Text } from '../../components/ThemeText';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthLayout, FormAlert } from '../../components/AuthLayout';

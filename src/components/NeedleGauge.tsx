@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { View, Text, Platform } from 'react-native';
+import { View } from 'react-native';
+import { ThemeText as Text } from './ThemeText';
 import Svg, { Path, Line, Text as SvgText, Circle, Polygon } from 'react-native-svg';
 import { useTheme } from '../theme/ThemeProvider';
 
@@ -23,8 +24,6 @@ export function NeedleGauge({ value, min = 0, max = 100, zones = [], fill, major
   const theme = useTheme();
   // compact: wide enough for "150%" at the right end of the scale
   const W = compact ? 392 : 320, H = compact ? 170 : 160, CX = W / 2, CY = compact ? 150 : 140, R = compact ? 100 : 104, BAND = compact ? 24 : 20, GAP = 0.9 / 180;
-  // SVG text does not inherit the app's font on the web preview
-  const FONT = Platform.OS === 'web' ? 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif' : undefined;
   const LABEL = compact ? 21 : 12;
   const frac = (v: number) => (Math.min(max, Math.max(min, v)) - min) / (max - min || 1);
   const pt = (f: number, r: number) => { const a = Math.PI * (1 - f); return { x: CX + r * Math.cos(a), y: CY - r * Math.sin(a) }; };
@@ -80,7 +79,7 @@ export function NeedleGauge({ value, min = 0, max = 100, zones = [], fill, major
             strokeWidth={t.major ? 2 : 1} strokeLinecap="round" />
         ))}
         {scale.labels.map((l, i) => (
-          <SvgText key={i} x={l.x} y={l.y + LABEL * 0.36} fontSize={LABEL} fontWeight="700" fontFamily={FONT} fill={theme.colors.textSecondary} textAnchor={l.anchor}>{l.text}</SvgText>
+          <SvgText key={i} x={l.x} y={l.y + LABEL * 0.36} fontSize={LABEL} fontFamily={theme.font.bold} fill={theme.colors.textSecondary} textAnchor={l.anchor}>{l.text}</SvgText>
         ))}
         <Polygon points={needle} fill={ink} />
         <Circle cx={CX} cy={CY} r={10} fill={ink} />

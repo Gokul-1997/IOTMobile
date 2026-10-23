@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { ThemeText as Text } from './ThemeText';
 import { StatusBar } from 'expo-status-bar';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { useAuthStore } from '../store/authStore';
@@ -54,14 +54,12 @@ export function AppBar({ onBack, onProfile, profileActive = false }: {
           accessibilityState={{ selected: profileActive }}
           style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
             borderWidth: 2, borderColor: profileActive ? theme.colors.accent : 'transparent', opacity: pressed ? 0.8 : 1 })}>
-          {/* the logo's navy-to-wine, behind white initials (7:1 or better) */}
-          <LinearGradient colors={['#2B3990', '#843D67']} start={{ x: 0, y: 1 }} end={{ x: 1, y: 0 }}
-            style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#2b3990', alignItems: 'center', justifyContent: 'center' }}>
             <Text maxFontSizeMultiplier={theme.textScale.fixed}
               style={{ color: '#ffffff', fontSize: 14, fontWeight: theme.weight.heavy as any, letterSpacing: 0.4 }}>
               {initialsOf(name)}
             </Text>
-          </LinearGradient>
+          </View>
         </Pressable>
       </View>
     </View>

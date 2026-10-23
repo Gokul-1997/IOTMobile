@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, RefreshControl } from 'react-native';
+import { View, ScrollView, RefreshControl } from 'react-native';
+import { ThemeText as Text } from '../../components/ThemeText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';

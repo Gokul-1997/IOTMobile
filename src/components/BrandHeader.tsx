@@ -1,5 +1,7 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { ThemeText as Text } from './ThemeText';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../theme/ThemeProvider';
 
 /*
@@ -16,10 +18,11 @@ export function BrandHeader({ title, eyebrow, right, children }: {
   children?: React.ReactNode;
 }) {
   const theme = useTheme();
-  // no background of its own: the header stands on the screen's STM field
   return (
     <View style={{ paddingTop: theme.spacing.lg, paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.lg }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, borderRadius: 14, padding: theme.spacing.md, overflow: 'hidden' }}>
+        <LinearGradient colors={theme.colors.headerBar} locations={theme.isDark ? [0, 0.6, 1] : [0, 0.55, 1]}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
         <View style={{ flex: 1, minWidth: 0 }}>
           {eyebrow ? (
             <Text numberOfLines={1} style={{ color: theme.colors.onHeaderMuted, fontSize: theme.type.micro, fontWeight: theme.weight.bold as any, letterSpacing: 1, textTransform: 'uppercase' }}>
@@ -27,7 +30,7 @@ export function BrandHeader({ title, eyebrow, right, children }: {
             </Text>
           ) : null}
           <Text accessibilityRole="header" numberOfLines={1}
-            style={{ color: theme.colors.onHeader, fontSize: theme.type.title, fontWeight: theme.weight.heavy as any, letterSpacing: -0.3, marginTop: 2 }}>
+            style={{ color: theme.colors.onHeader, fontSize: theme.type.subtitle, fontWeight: theme.weight.bold as any, letterSpacing: -0.2, marginTop: 2 }}>
             {title}
           </Text>
         </View>
@@ -42,7 +45,7 @@ export function BrandHeader({ title, eyebrow, right, children }: {
 export function LiveTag({ label }: { label: string }) {
   const theme = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.14)',
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.colors.fieldChip,
       borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
       <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: theme.colors.running }} />
       <Text maxFontSizeMultiplier={theme.textScale.figure} style={{ color: theme.colors.onHeader, fontSize: 11, fontWeight: theme.weight.bold as any, letterSpacing: 0.6 }}>{label}</Text>

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, FlatList, RefreshControl, TextInput } from 'react-native';
+import { View, FlatList, RefreshControl, TextInput } from 'react-native';
+import { ThemeText as Text } from '../../components/ThemeText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -284,7 +285,7 @@ export function DashboardScreen() {
                 <TextInput value={query} onChangeText={setQuery} placeholder="Search machine"
                   placeholderTextColor={theme.colors.textMuted} accessibilityLabel="Search machine"
                   autoCapitalize="none" autoCorrect={false} returnKeyType="search"
-                  style={{ flex: 1, color: theme.colors.textPrimary, fontSize: 15, paddingVertical: 10 }} />
+                  style={{ flex: 1, color: theme.colors.textPrimary, fontSize: 15, fontFamily: theme.font.regular, paddingVertical: 10 }} />
                 {query ? <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} onPress={() => setQuery('')} accessibilityLabel="Clear search" /> : null}
               </View>
               {error && error !== 'forbidden' && dashboard ? (

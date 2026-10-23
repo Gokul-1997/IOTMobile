@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, FlatList, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
+import { View, FlatList, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
+import { ThemeText as Text } from '../../components/ThemeText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useAuthStore } from '../../store/authStore';
