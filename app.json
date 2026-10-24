@@ -40,13 +40,7 @@
         }
       ],
       "expo-status-bar",
-      "expo-font",
-      [
-        "expo-notifications",
-        {
-          "color": "#2B3990"
-        }
-      ]
+      "expo-font"
     ],
     "extra": {
       "apiBaseUrl": "http://localhost:8000/api",

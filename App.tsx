@@ -18,10 +18,12 @@ function AppShell() {
   const [appReady, setAppReady] = useState(false);
 
   useEffect(() => {
+    let alive = true;
     (async () => {
       await bootstrap();
-      setAppReady(true);
+      if (alive) setAppReady(true);
     })();
+    return () => { alive = false; };
   }, [bootstrap]);
 
   const onLayoutRootView = useCallback(async () => {

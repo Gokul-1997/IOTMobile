@@ -25,17 +25,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // Called once on app start: if a token exists we trust it optimistically —
   // the first authenticated API call will refresh/clear it if invalid.
   // The user profile is restored from the local cache saved at sign-in,
-  // since there's no self-profile endpoint to re-fetch it from.
+  // since the basic profile endpoint does not return the role/company grants.
   bootstrap: async () => {
     const version = sessionVersion();
-    const token = await secureTokenStore.getAccessToken();
-    if (version !== sessionVersion()) return;
-    if (!token) {
-      set({ status: 'signedOut' });
-      return;
+    try {
+      const token = await secureTokenStore.getAccessToken();
+      if (version !== sessionVersion()) return;
+      if (!token) { set({ user: null, status: 'signedOut' }); return; }
+      const user = await secureTokenStore.getUser<AuthUser>();
+      if (version !== sessionVersion()) return;
+      if (!user?.id || !Array.isArray(user.roles) || !Array.isArray(user.permissions)) {
+        await secureTokenStore.clear().catch(() => {});
+        if (version === sessionVersion()) set({ user: null, status: 'signedOut' });
+        return;
+      }
+      set({ user, status: 'signedIn' });
+    } catch {
+      // Keychain/Keystore can be temporarily unavailable. Always leave the
+      // splash/checking state without exposing a partially restored session.
+      if (version === sessionVersion()) set({ user: null, status: 'signedOut', error: 'Unable to restore sign-in. Please sign in again.' });
     }
-    const user = await secureTokenStore.getUser<AuthUser>();
-    if (version === sessionVersion()) set({ user, status: 'signedIn' });
   },
 
   signIn: async (email, password) => {
