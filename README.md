@@ -8,6 +8,10 @@ Profile opens from the top-right account avatar on the main screens and machine
 detail. Its back action returns to the previous screen; Profile is no longer a
 bottom tab.
 
+The Shop Floor list requests six machines per page, matching the web Live
+Dashboard, through the shared `/dashboard` API. Previous/Next navigation,
+server-side search and status filters apply to the same authorized fleet.
+
 ## Company AI
 
 The AI tab uses the existing authenticated backend `/assistant/status` and
