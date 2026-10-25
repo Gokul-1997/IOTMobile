@@ -1,12 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, FlatList, RefreshControl, TextInput } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, FlatList, RefreshControl, TextInput, ActivityIndicator } from 'react-native';
 import { ThemeText as Text } from '../../components/ThemeText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
 import { useTheme } from '../../theme/ThemeProvider';
-import { statusKey, StatusKey } from '../../theme/colors';
+import { StatusKey } from '../../theme/colors';
 import { useAuthStore } from '../../store/authStore';
 import { hasPermission, SCREEN_PERMISSION } from '../../auth/permissions';
 import { BrandHeader, LiveTag } from '../../components/BrandHeader';
@@ -33,7 +33,7 @@ import { telemetrySeconds } from '../../api/telemetryTime';
  *  - a machine the socket has been quiet about for a minute takes its
  *    status and alarm from the snapshot instead — they froze at the first
  *    load before, so a cleared alarm stayed red;
- *  - a machine that stops reporting turns Offline after a minute even with
+ *  - a visible machine that stops reporting turns Offline after a minute even with
  *    no new event.
  */
 const POLL_INTERVAL_MS = 30_000;
@@ -77,69 +77,169 @@ export function DashboardScreen() {
   const [filter, setFilter] = useState<Filter>('ALL');
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const requestRef = useRef<AbortController | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
+  const listRef = useRef<FlatList<DashboardMachine>>(null);
+  const snapshotRequest = useRef<AbortController | null>(null);
+  const appendRequest = useRef<AbortController | null>(null);
+  const epoch = useRef(0);
+  const pageCache = useRef(new Map<number, { machines: DashboardMachine[]; fetchedAt: number }>());
+  const lastPage = useRef(0);
+  const totalPages = useRef(1);
+  const moreFailed = useRef(false);
   const lastSnapshotAt = useRef(0);
   const visibleIds = useRef(new Set<number>());
-  useEffect(() => { const timer = setTimeout(() => { setSearch(query.trim()); setPage(1); }, 300); return () => clearTimeout(timer); }, [query]);
-
+  const viewTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pendingUpdates = useRef(new Map<number, { status: MachineStatus; alarm: boolean }>());
-  const lastSeenRef = useRef<Map<number, number>>(new Map());      // telemetry freshness, s
-  const lastSocketRef = useRef<Map<number, number>>(new Map());    // when the socket last spoke, ms
+  const lastSeenRef = useRef(new Map<number, number>());
+  const lastSocketRef = useRef(new Map<number, number>());
+  const scopeKey = JSON.stringify([user?.id, user?.company_id, user?.plant_id, user?.auth_revision, filter, search]);
+  const scope = useRef(scopeKey);
+  scope.current = scopeKey;
+  const dataScope = useRef<string | null>(null);
+  const isActive = useRef(active && canSee);
+  isActive.current = active && canSee;
 
-  const fetchSilently = useCallback(async () => {
-    if (!active || !canSee) return;
-    requestRef.current?.abort();
-    const request = new AbortController();
-    requestRef.current = request;
-    try {
-      const data = await dashboardApi.getDashboard({ page, status: filter.toLowerCase(), search, signal: request.signal });
-      if (request.signal.aborted) return;
-      if (data.pagination && page > data.pagination.total_pages) { setPage(data.pagination.total_pages); return; }
-      visibleIds.current = new Set(data.machines.map(m => m.machine_id));
-      setMachineIds([...visibleIds.current]);
-      for (const map of [lastSeenRef.current, lastSocketRef.current]) {
-        for (const id of map.keys()) if (!visibleIds.current.has(id)) map.delete(id);
-      }
-      const socketNewer = new Set<number>();
-      for (const m of data.machines) {
-        const received = telemetrySeconds(m.received_at);
-        const latest = lastSeenRef.current.get(m.machine_id) ?? 0;
-        const socketLive = Date.now() - (lastSocketRef.current.get(m.machine_id) ?? 0) < SOCKET_SILENT_MS;
-        if (socketLive && (received == null || latest > received)) socketNewer.add(m.machine_id);
-        else {
-          // Keep server telemetry time, never the phone's snapshot-fetch time.
-          if (received != null) lastSeenRef.current.set(m.machine_id, Math.max(latest, received));
-          else if (m.status !== 'OFFLINE') lastSeenRef.current.set(m.machine_id, Math.floor(Date.now() / 1000));
-          pendingUpdates.current.delete(m.machine_id);
-        }
-      }
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
 
-      setDashboard((prev) => {
-        if (!prev) return data;
-        const existing = new Map(prev.machines.map((m) => [m.machine_id, m]));
-        const machines = data.machines.map((incoming) => {
-          const old = existing.get(incoming.machine_id);
-          if (!old) return incoming;
-          const live = pendingUpdates.current.get(incoming.machine_id) ?? old;
-          return socketNewer.has(incoming.machine_id) ? { ...incoming, status: live.status, alarm: live.alarm } : incoming;
-        });
-        return { ...data, machines };
-      });
-      setError(null);
-      setLastUpdated(new Date());
-      lastSnapshotAt.current = Date.now();
-    } catch (e: any) {
-      if (request.signal.aborted || e?.code === 'ERR_CANCELED') return;
-      const status = e?.response?.status;
-      setError(status === 403 ? 'forbidden' : 'Cannot reach the server. Showing the last data received.');
-    } finally {
-      if (requestRef.current === request) {
-        requestRef.current = null;
-        if (!request.signal.aborted) setLoading(false);
+  const cancelRequests = useCallback(() => {
+    epoch.current++;
+    snapshotRequest.current?.abort(); snapshotRequest.current = null;
+    appendRequest.current?.abort(); appendRequest.current = null;
+    clearTimeout(viewTimer.current);
+    pendingUpdates.current.clear();
+  }, []);
+
+  const resetFeed = useCallback((showLoading = true) => {
+    cancelRequests();
+    pageCache.current.clear();
+    lastPage.current = 0; totalPages.current = 1;
+    dataScope.current = null;
+    moreFailed.current = false;
+    lastSnapshotAt.current = 0;
+    visibleIds.current.clear();
+    lastSeenRef.current.clear(); lastSocketRef.current.clear();
+    setMachineIds([]);
+    setDashboard(null); setError(null); setMoreError(null);
+    setLoading(showLoading); setLoadingMore(false); setRefreshing(false); setLastUpdated(null);
+  }, [cancelRequests]);
+
+  // Cache page positions, deduplicate shifting offset pages by machine ID and
+  // preserve live patches on already loaded cards when another page arrives.
+  const applyPage = useCallback((data: DashboardResponse, page: number) => {
+    const sameScope = dataScope.current === scope.current;
+    const firstPage = lastPage.current === 0;
+    const pages = Math.max(1, data.pagination?.total_pages ?? 1);
+    totalPages.current = pages;
+    if (data.pagination?.total === 0) pageCache.current.clear();
+    for (const key of pageCache.current.keys()) if (key > pages) pageCache.current.delete(key);
+    if (page <= pages) pageCache.current.set(page, { machines: data.machines, fetchedAt: Date.now() });
+    lastPage.current = Math.min(Math.max(lastPage.current, page), pages);
+
+    const all = new Map<number, DashboardMachine>();
+    for (const [, cached] of [...pageCache.current].sort(([a], [b]) => a - b)) {
+      for (const machine of cached.machines) if (!all.has(machine.machine_id)) all.set(machine.machine_id, machine);
+    }
+    const incoming = new Map(data.machines.map(machine => [machine.machine_id, machine]));
+    const socketNewer = new Set<number>();
+    for (const machine of data.machines) {
+      const received = telemetrySeconds(machine.received_at);
+      const latest = lastSeenRef.current.get(machine.machine_id) ?? 0;
+      const socketLive = Date.now() - (lastSocketRef.current.get(machine.machine_id) ?? 0) < SOCKET_SILENT_MS;
+      if (socketLive && (received == null || latest > received)) socketNewer.add(machine.machine_id);
+      else {
+        if (received != null) lastSeenRef.current.set(machine.machine_id, Math.max(latest, received));
+        pendingUpdates.current.delete(machine.machine_id);
       }
     }
-  }, [active, canSee, page, filter, search, user?.id]);
+    for (const map of [lastSeenRef.current, lastSocketRef.current, pendingUpdates.current]) {
+      for (const id of map.keys()) if (!all.has(id)) map.delete(id);
+    }
+    const ids = [...visibleIds.current].filter(id => all.has(id));
+    if (firstPage) ids.push(...data.machines.slice(0, dashboardApi.DASHBOARD_PAGE_SIZE).map(machine => machine.machine_id));
+    const nextVisible = [...new Set(ids)].slice(0, 24);
+    if (nextVisible.join(',') !== [...visibleIds.current].join(',')) {
+      visibleIds.current = new Set(nextVisible);
+      if (isActive.current) setMachineIds(nextVisible);
+    }
+    dataScope.current = scope.current;
+    setDashboard(previous => {
+      const existing = new Map((sameScope ? previous?.machines ?? [] : []).map(machine => [machine.machine_id, machine]));
+      const machines = [...all.values()].map(cached => {
+        const fresh = incoming.get(cached.machine_id);
+        const old = existing.get(cached.machine_id);
+        if (!fresh) return old ?? cached;
+        const live = pendingUpdates.current.get(cached.machine_id) ?? old;
+        return live && socketNewer.has(cached.machine_id) ? { ...fresh, status: live.status, alarm: live.alarm } : fresh;
+      });
+      return { ...data, machines, pagination: data.pagination ? { ...data.pagination, page: lastPage.current } : undefined };
+    });
+    setError(null); setLastUpdated(new Date());
+    lastSnapshotAt.current = Date.now();
+  }, []);
+
+  // Refresh at most two visible pages, rather than all previously scrolled
+  // pages. One snapshot lane and one append lane bound concurrent API work.
+  const fetchSilently = useCallback(async (force = false) => {
+    if (scopeKey !== scope.current || !isActive.current || snapshotRequest.current || appendRequest.current) return;
+    const candidates = [...pageCache.current].filter(([, cached]) => cached.machines.some(machine => visibleIds.current.has(machine.machine_id)));
+    const visiblePages = candidates.length ? candidates : [[1, pageCache.current.get(1)] as const];
+    const due = visiblePages.filter(([, cached]) => force || Date.now() - (cached?.fetchedAt ?? 0) >= POLL_INTERVAL_MS)
+      .sort(([, a], [, b]) => (a?.fetchedAt ?? 0) - (b?.fetchedAt ?? 0)).slice(0, 2).map(([page]) => page);
+    if (!due.length) return;
+    const request = new AbortController(); snapshotRequest.current = request;
+    const revision = epoch.current, requestScope = scope.current;
+    const current = () => !request.signal.aborted && snapshotRequest.current === request && revision === epoch.current && requestScope === scope.current && isActive.current;
+    try {
+      for (const page of due) {
+        const data = await dashboardApi.getDashboard({ page, status: filter.toLowerCase(), search, signal: request.signal });
+        if (!current()) return;
+        applyPage(data, page);
+      }
+    } catch (e: any) {
+      if (!current() || e?.code === 'ERR_CANCELED') return;
+      if (e?.response?.status === 403) { resetFeed(false); setError('forbidden'); }
+      else setError('Cannot reach the server. Showing the last data received.');
+    } finally {
+      if (snapshotRequest.current === request) {
+        snapshotRequest.current = null;
+        if (currentScope(requestScope, revision)) { setLoading(false); setRefreshing(false); }
+      }
+    }
+    function currentScope(key: string, revision: number) {
+      return !request.signal.aborted && key === scope.current && revision === epoch.current && isActive.current;
+    }
+  }, [scopeKey, filter, search, applyPage, resetFeed]);
+  const refreshVisible = useRef(fetchSilently);
+  refreshVisible.current = fetchSilently;
+
+  const loadMore = useCallback(async (retry = false) => {
+    if (scopeKey !== scope.current || !isActive.current || appendRequest.current || lastPage.current === 0 || lastPage.current >= totalPages.current || (moreFailed.current && !retry)) return;
+    const request = new AbortController(); appendRequest.current = request;
+    const revision = epoch.current, requestScope = scope.current, page = lastPage.current + 1;
+    const current = () => !request.signal.aborted && appendRequest.current === request && revision === epoch.current && requestScope === scope.current && isActive.current;
+    moreFailed.current = false; setMoreError(null); setLoadingMore(true);
+    try {
+      const data = await dashboardApi.getDashboard({ page, status: filter.toLowerCase(), search, signal: request.signal });
+      if (!current()) return;
+      applyPage(data, page);
+    } catch (e: any) {
+      if (!current() || e?.code === 'ERR_CANCELED') return;
+      if (e?.response?.status === 403) { resetFeed(false); setError('forbidden'); }
+      else { moreFailed.current = true; setMoreError('Could not load more machines. Please try again.'); }
+    } finally {
+      if (appendRequest.current === request) {
+        appendRequest.current = null;
+        if (!request.signal.aborted && revision === epoch.current && requestScope === scope.current && isActive.current) {
+          setLoadingMore(false);
+          void refreshVisible.current();
+        }
+      }
+    }
+  }, [scopeKey, filter, search, applyPage, resetFeed]);
 
   const applySocketUpdate = useCallback((update: MachineUpdatePayload) => {
     if (!visibleIds.current.has(update.machine_id)) return;
@@ -155,80 +255,101 @@ export function DashboardScreen() {
     if (!pendingUpdates.current.size) return;
     const updates = new Map(pendingUpdates.current);
     pendingUpdates.current.clear();
-    setDashboard(prev => {
-      if (!prev) return prev;
+    setDashboard(previous => {
+      if (!previous) return previous;
       let changed = false;
-      const machines = prev.machines.map(machine => {
+      const machines = previous.machines.map(machine => {
         const patch = updates.get(machine.machine_id);
         if (!patch || (machine.status === patch.status && machine.alarm === patch.alarm)) return machine;
         changed = true;
         return { ...machine, ...patch };
       });
-      return changed ? { ...prev, machines } : prev;
+      return changed ? { ...previous, machines } : previous;
     });
   }, []);
 
   const sweepStaleness = useCallback(() => {
     const nowSec = Math.floor(Date.now() / 1000);
     setNow(Date.now());
-    setDashboard((prev) => {
-      if (!prev) return prev;
+    setDashboard(previous => {
+      if (!previous) return previous;
       let changed = false;
-      const machines = prev.machines.map((m) => {
-        const seenAt = lastSeenRef.current.get(m.machine_id);
-        if (seenAt != null && nowSec - seenAt > OFFLINE_THRESHOLD_SEC && m.status !== 'OFFLINE') {
+      const machines = previous.machines.map(machine => {
+        const seenAt = lastSeenRef.current.get(machine.machine_id);
+        if (visibleIds.current.has(machine.machine_id) && seenAt != null && nowSec - seenAt > OFFLINE_THRESHOLD_SEC && machine.status !== 'OFFLINE') {
           changed = true;
-          return { ...m, status: 'OFFLINE' as MachineStatus };
+          return { ...machine, status: 'OFFLINE' as MachineStatus };
         }
-        return m;
+        return machine;
       });
-      return changed ? { ...prev, machines } : prev;
+      return changed ? { ...previous, machines } : previous;
     });
   }, []);
 
-  useEffect(() => {
-    if (!canSee) { setLoading(false); return; }
-    if (!active) return;
-    setLoading(true);
-    void fetchSilently();
-    const batch = setInterval(flushUpdates, 500);
-    const poll = setInterval(fetchSilently, POLL_INTERVAL_MS);
-    const sweep = setInterval(sweepStaleness, STALENESS_SWEEP_MS);
-    return () => { requestRef.current?.abort(); clearInterval(batch); pendingUpdates.current.clear(); clearInterval(poll); clearInterval(sweep); };
-  }, [active, canSee, fetchSilently, sweepStaleness, flushUpdates]);
+  // FlatList requires stable viewability callbacks/configuration. Debouncing
+  // subscriptions keeps fast scrolling below the server's request limit.
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 10, minimumViewTime: 150 }).current;
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ item: DashboardMachine; isViewable: boolean }> }) => {
+    const ids = [...new Set(viewableItems.filter(item => item.isViewable).map(item => item.item.machine_id))].slice(0, 24);
+    clearTimeout(viewTimer.current);
+    viewTimer.current = setTimeout(() => {
+      if (!isActive.current || dataScope.current !== scope.current) return;
+      const loadedIds = new Set([...pageCache.current.values()].flatMap(cached => cached.machines.map(machine => machine.machine_id)));
+      const next = ids.filter(id => loadedIds.has(id));
+      if (next.join(',') !== [...visibleIds.current].join(',')) {
+        visibleIds.current = new Set(next);
+        setMachineIds(next);
+      }
+      void refreshVisible.current();
+    }, 200);
+  }).current;
 
-  // Company admins may have no plant; the server authenticates company scope.
+  useEffect(() => { resetFeed(canSee); }, [scopeKey, canSee, resetFeed]);
+
+  useEffect(() => {
+    if (!canSee || !active) return;
+    setLoading(pageCache.current.size === 0); setLoadingMore(false); setRefreshing(false);
+    void fetchSilently(true);
+    const batch = setInterval(flushUpdates, 500);
+    const poll = setInterval(() => { void fetchSilently(); }, POLL_INTERVAL_MS);
+    const sweep = setInterval(sweepStaleness, STALENESS_SWEEP_MS);
+    return () => {
+      cancelRequests(); setMachineIds([]);
+      clearInterval(batch); clearInterval(poll); clearInterval(sweep);
+    };
+  }, [active, canSee, scopeKey, fetchSilently, sweepStaleness, flushUpdates, cancelRequests]);
+
   useEffect(() => {
     if (!canSee || !active) return;
     const stop = onMachineUpdate(applySocketUpdate);
     const stopConnected = onSocketConnected(() => {
-      // The initial snapshot is already pending; do not download it again as the socket opens.
-      if (requestRef.current || Date.now() - lastSnapshotAt.current < 5_000) return;
-      void fetchSilently();
+      if (snapshotRequest.current || appendRequest.current || Date.now() - lastSnapshotAt.current < 5_000) return;
+      void fetchSilently(true);
     });
     void connectSocketQuietly();
     setMachineIds([...visibleIds.current]);
     return () => { stop(); stopConnected(); setMachineIds([]); };
-  }, [canSee, active, user?.id, applySocketUpdate, fetchSilently]);
+  }, [canSee, active, scopeKey, applySocketUpdate, fetchSilently]);
 
   const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await fetchSilently();
-    setRefreshing(false);
-  }, [fetchSilently]);
+    if (scopeKey !== scope.current || !isActive.current) return;
+    resetFeed(); setRefreshing(true);
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    await fetchSilently(true);
+  }, [scopeKey, resetFeed, fetchSilently]);
 
-  const machines = dashboard?.machines ?? [];
+  const currentDashboard = dataScope.current === scopeKey ? dashboard : null;
+  const shown = currentDashboard?.machines ?? [];
   const counts = {
-    RUNNING: dashboard?.summary.running ?? 0,
-    IDLE: dashboard?.summary.idle ?? 0,
-    ALARM: dashboard?.summary.alarm ?? 0,
-    OFFLINE: dashboard?.summary.offline ?? 0,
+    RUNNING: currentDashboard?.summary.running ?? 0,
+    IDLE: currentDashboard?.summary.idle ?? 0,
+    ALARM: currentDashboard?.summary.alarm ?? 0,
+    OFFLINE: currentDashboard?.summary.offline ?? 0,
   };
-  const total = dashboard?.summary.total ?? 0;
-  const shown = machines;
-  const pages = dashboard?.pagination?.total_pages ?? 1;
+  const total = currentDashboard?.summary.total ?? 0;
+  const hasMore = lastPage.current < totalPages.current;
 
-  const eyebrow = [user?.company_name, dashboard?.shift?.shift_code].filter(Boolean).join(' · ') || 'Live';
+  const eyebrow = [user?.company_name, currentDashboard?.shift?.shift_code].filter(Boolean).join(' · ') || 'Live';
 
   const header = (
     <BrandHeader title="Shop Floor" eyebrow={eyebrow} right={canSee ? <LiveTag label={timeAgo(lastUpdated, now)} /> : undefined}>
@@ -258,7 +379,16 @@ export function DashboardScreen() {
 
   return (
     <StmScreen>
-      <FlatList
+      <FlatList<DashboardMachine>
+        ref={listRef}
+        key={scopeKey}
+        onEndReached={() => loadMore()}
+        onEndReachedThreshold={0.4}
+        initialNumToRender={dashboardApi.DASHBOARD_PAGE_SIZE}
+        maxToRenderPerBatch={dashboardApi.DASHBOARD_PAGE_SIZE}
+        windowSize={5}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
         data={loading ? [] : shown}
         keyExtractor={(m) => String(m.machine_id)}
         contentContainerStyle={{ paddingBottom: theme.spacing.xxl }}
@@ -270,7 +400,7 @@ export function DashboardScreen() {
               <StatusFilter
                 accessibilityLabel="Show machines"
                 value={filter}
-                onChange={(k) => { setFilter(k as Filter); setPage(1); }}
+                onChange={(k) => setFilter(k as Filter)}
                 chips={[
                   { key: 'ALL', label: 'All', count: total },
                   { key: 'ALARM', label: 'Alarm', count: counts.ALARM, dot: theme.colors.alarm },
@@ -284,11 +414,11 @@ export function DashboardScreen() {
                 <Ionicons name="search" size={18} color={theme.colors.textMuted} />
                 <TextInput value={query} onChangeText={setQuery} placeholder="Search machine"
                   placeholderTextColor={theme.colors.textMuted} accessibilityLabel="Search machine"
-                  autoCapitalize="none" autoCorrect={false} returnKeyType="search"
+                  autoCapitalize="none" autoCorrect={false} returnKeyType="search" maxLength={100}
                   style={{ flex: 1, color: theme.colors.textPrimary, fontSize: 15, fontFamily: theme.font.regular, paddingVertical: 10 }} />
                 {query ? <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} onPress={() => setQuery('')} accessibilityLabel="Clear search" /> : null}
               </View>
-              {error && error !== 'forbidden' && dashboard ? (
+              {error && error !== 'forbidden' && currentDashboard ? (
                 <View accessibilityRole="alert" style={{ marginHorizontal: theme.spacing.lg, padding: 10, borderRadius: theme.radius.md, backgroundColor: theme.colors.warningBg, flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                   <Ionicons name="cloud-offline-outline" size={18} color={theme.colors.warning} />
                   <Text style={{ flex: 1, color: theme.colors.warning, fontSize: 13, fontWeight: theme.weight.semibold as any }}>{error}</Text>
@@ -311,18 +441,22 @@ export function DashboardScreen() {
               : undefined} />
           </View>
         )}
-        ListFooterComponent={pages > 1 ? (
-          <View style={{ padding: theme.spacing.lg, gap: 12 }}>
-            <Text accessibilityLiveRegion="polite" style={{ color: theme.colors.textSecondary }}>Page {page} of {pages}</Text>
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <Button label="Previous" variant="secondary" disabled={page <= 1 || loading} onPress={() => setPage(p => p - 1)} />
-              <Button label="Next" variant="secondary" disabled={page >= pages || loading} onPress={() => setPage(p => p + 1)} />
-            </View>
+        ListFooterComponent={!loading && shown.length > 0 ? (
+          <View style={{ padding: theme.spacing.lg, gap: 12, alignItems: 'center' }}>
+            {loadingMore ? <ActivityIndicator accessibilityLabel="Loading more machines" color={theme.colors.onField} />
+              : moreError ? <>
+                <Text accessibilityRole="alert" style={{ color: theme.colors.onField }}>{moreError}</Text>
+                <Button label="Try again" variant="secondary" onPress={() => loadMore(true)} />
+              </> : hasMore
+                // Also allows keyboard/screen-reader loading and recovery if a
+                // shifting offset page contains no new IDs/content height.
+                ? <Button label="Load more machines" variant="secondary" onPress={() => loadMore()} />
+                : <Text accessibilityLiveRegion="polite" style={{ color: theme.colors.onFieldMuted }}>End of machine list</Text>}
           </View>
         ) : null}
         ListEmptyComponent={loading ? null : error === 'forbidden'
           ? <NoAccess what="the shop floor" />
-          : !dashboard && error
+          : !currentDashboard && error
             ? <EmptyState icon="cloud-offline-outline" tone="danger" title="Cannot reach the server" message={error} actionLabel="Try again" onAction={onRefresh} />
             : <EmptyState icon="hardware-chip-outline"
                 title={total ? 'No machines match' : 'No machines yet'}

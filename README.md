@@ -8,9 +8,13 @@ Profile opens from the top-right account avatar on the main screens and machine
 detail. Its back action returns to the previous screen; Profile is no longer a
 bottom tab.
 
-The Shop Floor list requests six machines per page, matching the web Live
-Dashboard, through the shared `/dashboard` API. Previous/Next navigation,
-server-side search and status filters apply to the same authorized fleet.
+The Shop Floor list loads six machines at a time through the shared `/dashboard`
+API. Scrolling near the bottom appends the next six, with a loading indicator
+and retry on failure. A Load more button also supports accessible/manual loading
+if live changes produce an overlapping page. Pull-to-refresh, search or a status
+change starts again from the first six. Background refresh and live subscriptions cover visible
+cards, so scrolling through a large fleet does not subscribe to every machine.
+The web Live Dashboard keeps its existing six-card pagination.
 
 ## Company AI
 
