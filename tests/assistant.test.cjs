@@ -21,8 +21,11 @@ const initialUser = () => ({ id: 7, company_id: 4, plant_id: 8, auth_revision: 2
 const status = (extra = {}) => ({ name: 'Mexa AI', enabled: true, welcome: 'Company assistant',
   allowance: { limit: 50, used: 0, remaining: 50 }, ...extra });
 const reply = (extra = {}) => ({ kind: 'answer', text: 'Production is 12 pcs.', sig: 'server-signature', sources: [], ...extra });
-function fixture() {
+function fixture({ agreed = true } = {}) {
   let current = { user: initialUser(), status: 'signedIn' };
+  // the phone's saved agreement to questions going to the AI provider (company 4, user 7)
+  const prefs = new Map(agreed ? [['assistant.consent.4.7', '1']] : []);
+  let readPref = async key => prefs.get(key) ?? null;
   let authChanged;
   let statusCall = async () => status(), chatCall = async () => reply();
   const calls = { status: 0, chat: 0 };
@@ -43,10 +46,11 @@ function fixture() {
     '../api/session': session,
     '../auth/permissions': { mayUseAssistant: user => !!user?.company_id && !user.is_snt_super && user.company_permissions?.includes('page:assistant:view') },
     './authStore': { useAuthStore: { getState: () => current, subscribe: listener => { authChanged = listener; } } },
+    './prefs': { getPref: key => readPref(key), setPref: async (key, value) => { prefs.set(key, value); } },
   });
   return {
     store: useAssistantStore, get: useAssistantStore.getState, calls, session,
-    status: fn => { statusCall = fn; }, chat: fn => { chatCall = fn; },
+    status: fn => { statusCall = fn; }, chat: fn => { chatCall = fn; }, prefs, readPref: fn => { readPref = fn; },
     auth: patch => { const previous = current; current = { ...current, ...patch }; authChanged(current, previous); },
   };
 }
@@ -183,4 +187,46 @@ test('a failed status refresh disables send until a fresh successful check', asy
   assert.equal(await f.get().send('Today’s production?'), false);
   f.status(async () => status()); await f.get().fetchStatus();
   assert.equal(f.get().unavailable, false); assert.equal(await f.get().send('Today’s production?'), true);
+});
+
+test('nothing is asked until the person agrees to questions going to the AI provider; the agreement is per account', async () => {
+  const f = fixture({ agreed: false }); await f.get().fetchStatus();
+  assert.equal(f.get().consent, false);
+  assert.equal(await f.get().send('Today’s production?'), false); assert.equal(f.calls.chat, 0);
+  await f.get().agree();
+  assert.equal(f.prefs.get('assistant.consent.4.7'), '1');
+  assert.equal(await f.get().send('Today’s production?'), true); assert.equal(f.calls.chat, 1);
+  f.auth({ user: { ...initialUser(), id: 8 } });                       // someone else on the same phone
+  assert.equal(f.get().consent, null); await f.get().fetchStatus();
+  assert.equal(f.get().consent, false); assert.equal(await f.get().send('Hello'), false);
+  f.auth({ user: initialUser() }); await f.get().fetchStatus();
+  assert.equal(f.get().consent, true);
+});
+
+test('a slow agreement read cannot undo an agreement or reach the next account', async () => {
+  const f = fixture({ agreed: false }); let finish;
+  f.readPref(() => new Promise(resolve => { finish = resolve; }));
+  const first = f.get().fetchStatus(); await flush();
+  await f.get().agree(); finish(null); await first;
+  assert.equal(f.get().consent, true);
+
+  const g = fixture(); let release;
+  g.readPref(() => new Promise(resolve => { release = resolve; }));
+  const pending = g.get().fetchStatus(); await flush();
+  g.auth({ status: 'signedOut', user: null });
+  release('1'); await pending;
+  assert.equal(g.get().consent, null);
+});
+
+test('taking the agreement back ends the chat, stops questions and is remembered', async () => {
+  const f = fixture(); await f.get().fetchStatus();
+  let signal;
+  f.chat((_, s) => { signal = s; return new Promise(() => {}); });
+  void f.get().send('Today’s production?');
+  await f.get().withdraw();
+  assert.equal(signal.aborted, true); assert.deepEqual(f.get().messages, []); assert.equal(f.get().sending, false);
+  assert.equal(f.get().consent, false); assert.equal(f.prefs.get('assistant.consent.4.7'), 'no');
+  assert.equal(await f.get().send('Again?'), false);
+  f.auth({ status: 'signedOut', user: null }); f.auth({ status: 'signedIn', user: initialUser() });
+  await f.get().fetchStatus(); assert.equal(f.get().consent, false);
 });

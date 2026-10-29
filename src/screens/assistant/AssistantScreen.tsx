@@ -1,15 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Pressable, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeText as Text } from '../../components/ThemeText';
 import { StmScreen } from '../../components/StmScreen';
 import { BrandHeader } from '../../components/BrandHeader';
+import { Button } from '../../components/Button';
+import { PRIVACY_POLICY_URL, openLink } from '../../config/legal';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useAssistantStore } from '../../store/assistantStore';
 import { useAuthStore } from '../../store/authStore';
 import { useAppActive } from '../../hooks/useAppActive';
+import { reportAnswer } from '../../api/assistant';
 import type { AssistantMessage, AssistantSource } from '../../types/assistant';
 
 function day(value: string): string {
@@ -43,7 +46,66 @@ function SourceCard({ source }: { source: AssistantSource }) {
   );
 }
 
-const Message = React.memo(function Message({ message, name, disabled }: { message: AssistantMessage; name: string; disabled: boolean }) {
+/** Asked once per account on each phone, before a first question goes to the AI provider (App Store 5.1.2). */
+function ConsentCard({ name }: { name: string }) {
+  const theme = useTheme();
+  return (
+    <View style={{ backgroundColor: theme.colors.surface, borderRadius: theme.radius.xl, padding: 22, ...theme.shadow.card }}>
+      <View style={{ width: 48, height: 48, borderRadius: 15, backgroundColor: theme.colors.surfaceAlt,
+        alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
+        <Ionicons name="shield-checkmark-outline" size={25} color={theme.colors.accent} />
+      </View>
+      <Text accessibilityRole="header" style={{ fontSize: 22, fontWeight: '700', lineHeight: 29, color: theme.colors.textPrimary }}>
+        Before you ask
+      </Text>
+      <Text style={{ color: theme.colors.textSecondary, fontSize: 14, lineHeight: 22, marginTop: 10 }}>
+        To answer, {name} sends your question and the company records it needs — such as machine names, production
+        figures and operator names — to Claude, the AI service of Anthropic. Anthropic uses them only to write the
+        answer, not to train its AI.
+      </Text>
+      <Button label="Agree and continue" onPress={() => { void useAssistantStore.getState().agree(); }} style={{ marginTop: 22 }} />
+      <Pressable onPress={() => { void openLink(PRIVACY_POLICY_URL); }} accessibilityRole="link" hitSlop={4}
+        style={({ pressed }) => ({ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6,
+          minHeight: 44, paddingHorizontal: 10, marginTop: 6, opacity: pressed ? 0.65 : 1 })}>
+        <Text style={{ color: theme.colors.accent, fontSize: 13, fontWeight: '600' }}>Privacy policy</Text>
+        <Ionicons name="open-outline" size={14} color={theme.colors.accent} />
+      </Pressable>
+    </View>
+  );
+}
+
+/** Flag an answer as wrong or offensive without leaving the app (Google Play's AI content policy). */
+function ReportAnswer({ message, question }: { message: AssistantMessage; question?: string }) {
+  const theme = useTheme();
+  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
+  const report = async () => {
+    setState('sending');
+    try { await reportAnswer(message.text, question); setState('sent'); } catch { setState('failed'); }
+  };
+  if (state === 'sent') {
+    return (
+      <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, marginTop: 6 }}>
+        <Ionicons name="checkmark-circle-outline" size={15} color={theme.colors.textMuted} />
+        <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>Reported. Thank you.</Text>
+      </View>
+    );
+  }
+  return (
+    <Pressable onPress={() => { void report(); }} disabled={state === 'sending'} hitSlop={6}
+      accessibilityRole="button" accessibilityLabel="Report this answer as wrong or offensive" accessibilityState={{ busy: state === 'sending' }}
+      style={({ pressed }) => ({ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6,
+        minHeight: 36, marginTop: 6, paddingRight: 10, opacity: state === 'sending' ? 0.5 : pressed ? 0.65 : 1 })}>
+      <Ionicons name="flag-outline" size={14} color={state === 'failed' ? theme.colors.danger : theme.colors.textMuted} />
+      <Text style={{ color: state === 'failed' ? theme.colors.danger : theme.colors.textMuted, fontSize: 12 }}>
+        {state === 'failed' ? 'Not sent. Tap to try again.' : 'Report'}
+      </Text>
+    </Pressable>
+  );
+}
+
+const Message = React.memo(function Message({ message, name, disabled, question }: {
+  message: AssistantMessage; name: string; disabled: boolean; question?: string;
+}) {
   const theme = useTheme();
   const user = message.role === 'user';
   const error = message.kind === 'error';
@@ -75,6 +137,7 @@ const Message = React.memo(function Message({ message, name, disabled }: { messa
             <Text style={{ color: theme.colors.accent, fontSize: 13, fontWeight: '600' }}>Try again</Text>
           </Pressable>
         ) : null}
+        {!user && !error && message.kind !== 'note' ? <ReportAnswer message={message} question={question} /> : null}
       </View>
     </View>
   );
@@ -91,13 +154,16 @@ export function AssistantScreen() {
   const unavailable = useAssistantStore(state => state.unavailable);
   const statusError = useAssistantStore(state => state.statusError);
   const statusLoading = useAssistantStore(state => state.statusLoading);
+  const consent = useAssistantStore(state => state.consent);
   const user = useAuthStore(state => state.user);
   const [draft, setDraft] = useState('');
   const log = useRef<FlatList<AssistantMessage>>(null);
   const name = status?.name || 'AI assistant';
   const allowance = status?.allowance;
   const limited = !!allowance && allowance.remaining <= 0;
-  const closed = !status?.enabled || unavailable || limited;
+  const closed = !status?.enabled || unavailable || limited || consent !== true;
+  /** Not agreed yet to questions going to the AI provider: that is asked first. */
+  const asking = !!status?.enabled && consent === false;
   const disabled = closed || sending;
   const firstName = (user?.username || '').trim().split(/\s+/)[0];
 
@@ -117,8 +183,9 @@ export function AssistantScreen() {
 
   return (
     <StmScreen>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={insets.top + 56}>
+      {/* padding on Android too: edge to edge, Android no longer shrinks the
+          window for the keyboard (AuthLayout); the offset is the app bar above */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={insets.top + 56}>
         <BrandHeader title={name} eyebrow="Company assistant" right={messages.length ? (
           <Pressable onPress={() => { useAssistantStore.getState().newChat(); setDraft(''); }}
             accessibilityRole="button" accessibilityLabel="Start a new chat" hitSlop={4}
@@ -135,37 +202,40 @@ export function AssistantScreen() {
           onContentSizeChange={() => log.current?.scrollToEnd({ animated: !theme.reduceMotion })}
           ListEmptyComponent={
             <View style={{ flex: 1, justifyContent: 'center', paddingVertical: 20 }}>
-              <View style={{ backgroundColor: theme.colors.surface, borderRadius: theme.radius.xl, padding: 22, ...theme.shadow.card }}>
-                <View style={{ width: 48, height: 48, borderRadius: 15, backgroundColor: theme.colors.surfaceAlt,
-                  alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
-                  <Ionicons name="sparkles-outline" size={25} color={theme.colors.accent} />
-                </View>
-                <Text accessibilityRole="header" style={{ fontSize: 22, fontWeight: '700', lineHeight: 29, color: theme.colors.textPrimary }}>
-                  {firstName ? `How can I help, ${firstName}?` : 'How can I help?'}
-                </Text>
-                <Text style={{ color: theme.colors.textSecondary, fontSize: 14, lineHeight: 22, marginTop: 10 }}>
-                  {status?.welcome || 'Ask about your company’s records and how to use MEXA.'}
-                </Text>
-                {!!status?.suggestions?.length && !closed ? (
-                  <View style={{ gap: 8, marginTop: 22 }}>
-                    <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.9, color: theme.colors.textMuted, marginBottom: 2 }}>TRY ASKING</Text>
-                    {status.suggestions.slice(0, 6).map(suggestion => (
-                      <Pressable key={suggestion} onPress={() => send(suggestion)} disabled={disabled}
-                        accessibilityRole="button" accessibilityLabel={suggestion} accessibilityState={{ disabled }}
-                        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10,
-                          paddingHorizontal: 12, paddingVertical: 12, minHeight: 48, borderRadius: theme.radius.md,
-                          backgroundColor: pressed ? theme.colors.border : theme.colors.surfaceAlt })}>
-                        <Ionicons name="chatbubble-outline" size={16} color={theme.colors.accent} />
-                        <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: 13, lineHeight: 19 }}>{suggestion}</Text>
-                        <Ionicons name="arrow-up-outline" size={16} color={theme.colors.textMuted} />
-                      </Pressable>
-                    ))}
+              {asking ? <ConsentCard name={name} /> : (
+                <View style={{ backgroundColor: theme.colors.surface, borderRadius: theme.radius.xl, padding: 22, ...theme.shadow.card }}>
+                  <View style={{ width: 48, height: 48, borderRadius: 15, backgroundColor: theme.colors.surfaceAlt,
+                    alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
+                    <Ionicons name="sparkles-outline" size={25} color={theme.colors.accent} />
                   </View>
-                ) : null}
-              </View>
+                  <Text accessibilityRole="header" style={{ fontSize: 22, fontWeight: '700', lineHeight: 29, color: theme.colors.textPrimary }}>
+                    {firstName ? `How can I help, ${firstName}?` : 'How can I help?'}
+                  </Text>
+                  <Text style={{ color: theme.colors.textSecondary, fontSize: 14, lineHeight: 22, marginTop: 10 }}>
+                    {status?.welcome || 'Ask about your company’s records and how to use MEXA.'}
+                  </Text>
+                  {!!status?.suggestions?.length && !closed ? (
+                    <View style={{ gap: 8, marginTop: 22 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.9, color: theme.colors.textMuted, marginBottom: 2 }}>TRY ASKING</Text>
+                      {status.suggestions.slice(0, 6).map(suggestion => (
+                        <Pressable key={suggestion} onPress={() => send(suggestion)} disabled={disabled}
+                          accessibilityRole="button" accessibilityLabel={suggestion} accessibilityState={{ disabled }}
+                          style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 10,
+                            paddingHorizontal: 12, paddingVertical: 12, minHeight: 48, borderRadius: theme.radius.md,
+                            backgroundColor: pressed ? theme.colors.border : theme.colors.surfaceAlt })}>
+                          <Ionicons name="chatbubble-outline" size={16} color={theme.colors.accent} />
+                          <Text style={{ flex: 1, color: theme.colors.textPrimary, fontSize: 13, lineHeight: 19 }}>{suggestion}</Text>
+                          <Ionicons name="arrow-up-outline" size={16} color={theme.colors.textMuted} />
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              )}
             </View>
           }
-          renderItem={({ item }) => <Message message={item} name={name} disabled={disabled} />}
+          renderItem={({ item, index }) => <Message message={item} name={name} disabled={disabled}
+            question={messages[index - 1]?.role === 'user' ? messages[index - 1].text : undefined} />}
           ListFooterComponent={sending ? (
             <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 10,
               alignSelf: 'flex-start', marginTop: 16, paddingVertical: 12, paddingHorizontal: 15,
@@ -175,6 +245,7 @@ export function AssistantScreen() {
             </View>
           ) : null} />
 
+        {asking && !unavailable ? null : (
         <View style={{ borderTopWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.chrome,
           paddingHorizontal: 16, paddingTop: 11, paddingBottom: Math.max(insets.bottom ? 0 : 4, 10) }}>
           <View style={{ width: '100%', maxWidth: 728, alignSelf: 'center' }}>
@@ -216,6 +287,7 @@ export function AssistantScreen() {
             </View>
           </View>
         </View>
+        )}
       </KeyboardAvoidingView>
     </StmScreen>
   );

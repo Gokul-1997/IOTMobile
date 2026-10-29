@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, FlatList, RefreshControl, TextInput, ActivityIndicator } from 'react-native';
+import { View, FlatList, RefreshControl, TextInput, ActivityIndicator, Pressable } from 'react-native';
 import { ThemeText as Text } from '../../components/ThemeText';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
@@ -416,7 +416,13 @@ export function DashboardScreen() {
                   placeholderTextColor={theme.colors.textMuted} accessibilityLabel="Search machine"
                   autoCapitalize="none" autoCorrect={false} returnKeyType="search" maxLength={100}
                   style={{ flex: 1, color: theme.colors.textPrimary, fontSize: 15, fontFamily: theme.font.regular, paddingVertical: 10 }} />
-                {query ? <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} onPress={() => setQuery('')} accessibilityLabel="Clear search" /> : null}
+                {/* a real button, 44 wide with its slop: an icon alone was too small to hit and not announced as a button */}
+                {query ? (
+                  <Pressable onPress={() => setQuery('')} accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={4}
+                    style={{ width: 36, height: 36, marginRight: -8, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
+                  </Pressable>
+                ) : null}
               </View>
               {error && error !== 'forbidden' && currentDashboard ? (
                 <View accessibilityRole="alert" style={{ marginHorizontal: theme.spacing.lg, padding: 10, borderRadius: theme.radius.md, backgroundColor: theme.colors.warningBg, flexDirection: 'row', gap: 8, alignItems: 'center' }}>

@@ -4,6 +4,7 @@ import { LatestRequest } from '../api/latestRequest';
 import { sessionVersion } from '../api/session';
 import { mayUseAssistant } from '../auth/permissions';
 import { useAuthStore } from './authStore';
+import { getPref, setPref } from './prefs';
 import type { AuthUser } from '../types/auth';
 import type { AssistantMessage, AssistantStatus } from '../types/assistant';
 
@@ -14,6 +15,11 @@ interface AssistantState {
   unavailable: boolean;
   messages: AssistantMessage[];
   sending: boolean;
+  /** This person agreed, on this phone, to questions going to the AI provider; null until read. */
+  consent: boolean | null;
+  agree: () => Promise<void>;
+  /** Taken back (Profile): the open chat ends and the next question asks again. */
+  withdraw: () => Promise<void>;
   fetchStatus: () => Promise<void>;
   send: (text: string) => Promise<boolean>;
   retry: (id: string) => Promise<boolean>;
@@ -36,7 +42,17 @@ const allowed = () => {
   const auth = useAuthStore.getState();
   return auth.status === 'signedIn' && mayUseAssistant(auth.user);
 };
-const empty = { status: null, statusLoading: false, statusError: null, unavailable: false, messages: [], sending: false };
+const empty = { status: null, statusLoading: false, statusError: null, unavailable: false, messages: [], sending: false, consent: null };
+
+/* Questions, and the company records that answer them, go to the AI provider
+   (Anthropic): nothing is asked until the person has agreed to that, once per
+   account on each phone (App Store 5.1.2). Bump CONSENT when what is sent, or
+   to whom, changes: everyone is asked again. */
+const CONSENT = '1';
+const consentKey = () => {
+  const user = useAuthStore.getState().user;
+  return user ? `assistant.consent.${user.company_id}.${user.id}` : null;
+};
 
 function stopAll() {
   generation++;
@@ -50,10 +66,17 @@ function errorMessage(error: any, fallback: string): string {
   return typeof text === 'string' && text.trim() ? text.trim().slice(0, 700) : fallback;
 }
 
-/** Session memory only. Nothing is written to device storage or sent to an AI provider directly. */
+/** Session memory only, besides the agreement above. Nothing is sent to an AI provider directly. */
 export const useAssistantStore = create<AssistantState>((set, get) => {
-  const closed = () => !allowed() || !get().status?.enabled || get().unavailable
+  const closed = () => !allowed() || !get().status?.enabled || get().unavailable || get().consent !== true
     || (get().status?.allowance?.remaining ?? 1) <= 0;
+
+  async function readConsent() {
+    const key = consentKey(), scope = generation, version = sessionVersion();
+    if (!key) return;
+    const agreed = (await getPref(key)) === CONSENT;
+    if (scope === generation && version === sessionVersion() && key === consentKey() && get().consent === null) set({ consent: agreed });
+  }
 
   async function put(history: AssistantMessage[], text: string): Promise<boolean> {
     if (closed() || get().sending) return false;
@@ -87,9 +110,23 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
 
   return {
     ...empty,
+    agree: async () => {
+      const key = consentKey();
+      if (!key || !allowed()) return;
+      set({ consent: true });
+      await setPref(key, CONSENT);
+    },
+    withdraw: async () => {
+      const key = consentKey();
+      if (!key) return;
+      get().cancel();
+      set({ consent: false, messages: [] });
+      await setPref(key, 'no');
+    },
     fetchStatus: async () => {
       if (!allowed()) { get().reset(); return; }
       const scope = generation, version = sessionVersion(), revision = allowanceRevision;
+      const consentRead = get().consent === null ? readConsent() : null;
       set({ statusLoading: true });
       try {
         const status = await statusRequest.run(getAssistantStatus);
@@ -107,6 +144,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => {
         set({ unavailable: true, statusError: errorMessage(error, 'Unable to connect. Please try again.') });
       } finally {
         if (scope === generation) set({ statusLoading: false });
+        await consentRead;
       }
     },
     send: async text => {

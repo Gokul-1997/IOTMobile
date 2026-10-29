@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ScrollView, KeyboardAvoidingView } from 'react-native';
+import { View, ScrollView, KeyboardAvoidingView, Pressable } from 'react-native';
 import { ThemeText as Text } from './ThemeText';
 import { StmScreen } from './StmScreen';
 import { StatusBar } from 'expo-status-bar';
@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { useTheme } from '../theme/ThemeProvider';
 import { BrandLogo } from './StmMexaLogo';
+import { PRIVACY_POLICY_URL, openLink } from '../config/legal';
 
 /*
  * The signed-out screens: the STM field, and on it one card opening with the
@@ -52,9 +53,16 @@ export function AuthLayout({ title, subtitle, children, top }: {
           </View>
         </View>
 
-        <Text style={{ textAlign: 'center', color: theme.colors.onFieldMuted, fontSize: 12, paddingVertical: theme.spacing.xl, paddingBottom: insets.bottom + theme.spacing.lg }}>
-          © STM MEXA · v{version}
-        </Text>
+        {/* the privacy policy, reachable before signing in (App Store 5.1.1(i)) */}
+        <View style={{ alignItems: 'center', gap: 4, paddingVertical: theme.spacing.xl, paddingBottom: insets.bottom + theme.spacing.lg }}>
+          <Pressable onPress={() => { void openLink(PRIVACY_POLICY_URL); }} accessibilityRole="link" hitSlop={8}
+            style={{ minHeight: 32, justifyContent: 'center', paddingHorizontal: 8 }}>
+            <Text style={{ color: theme.colors.onField, fontSize: 13, fontWeight: theme.weight.semibold as any, textDecorationLine: 'underline' }}>
+              Privacy policy
+            </Text>
+          </Pressable>
+          <Text style={{ textAlign: 'center', color: theme.colors.onFieldMuted, fontSize: 12 }}>© STM MEXA · v{version}</Text>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
     </StmScreen>

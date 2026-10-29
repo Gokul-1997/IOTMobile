@@ -23,6 +23,11 @@ export function assistantTurns(messages: AssistantMessage[]): AssistantTurn[] {
   return recent;
 }
 
+/** Flag an answer as wrong or offensive, from inside the app (Google Play's AI content policy). */
+export async function reportAnswer(answer: string, question?: string): Promise<void> {
+  await apiClient.post('/assistant/report', { answer, question });
+}
+
 export async function askAssistant(messages: AssistantMessage[], signal?: AbortSignal): Promise<AssistantReply> {
   const { data } = await apiClient.post<{ data: AssistantReply }>('/assistant/chat', {
     messages: assistantTurns(messages),
