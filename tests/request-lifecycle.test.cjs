@@ -44,13 +44,13 @@ function hooks() {
   const values = [], effects = [], queued = []; let cursor = 0;
   const same = (a, b) => !!a && a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
   const react = {
-    createElement: () => null,
+    createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
     useState: initial => { const i = cursor++; if (!(i in values)) values[i] = initial; return [values[i], value => { values[i] = typeof value === 'function' ? value(values[i]) : value; }]; },
     useRef: initial => { const i = cursor++; return values[i] ||= { current: initial }; },
     useCallback: (fn, deps) => { const i = cursor++; if (!same(values[i]?.deps, deps)) values[i] = { deps, fn }; return values[i].fn; },
     useEffect: (fn, deps) => { const i = cursor++; if (!same(effects[i]?.deps, deps)) queued.push(() => { effects[i]?.cleanup?.(); effects[i] = { deps, cleanup: fn() }; }); }
   };
-  return { react, render: fn => { cursor = 0; fn(); queued.splice(0).forEach(fn => fn()); }, state: i => values[i], close: () => effects.forEach(effect => effect?.cleanup?.()) };
+  return { react, render: fn => { cursor = 0; const tree = fn(); queued.splice(0).forEach(fn => fn()); return tree; }, state: i => values[i], close: () => effects.forEach(effect => effect?.cleanup?.()) };
 }
 function screenFixture(apis = {}) {
   const host = hooks(), counts = { detail: 0, chart: 0, timeline: 0 };
@@ -107,4 +107,22 @@ test('a delayed old machine response cannot replace the new machine', async () =
   screen.render(); await flush(); screen.machine(8); await flush();
   oldReply({ machine: { name: 'CNC-7' } }); await flush();
   assert.equal(screen.host.state(0).machine.name, 'CNC-8'); screen.close();
+});
+
+
+test('the real machine screen distinguishes missing shift energy from a measured zero', async () => {
+  const nodes = tree => !tree || typeof tree !== 'object' ? [] : [tree,
+    ...(Array.isArray(tree) ? tree : tree.children || []).flatMap(nodes)];
+  for (const [value, expected] of [[null, '--'], [undefined, '--'], [0, '0.0'], [2.34, '2.3']]) {
+    const screen = screenFixture({ detail: () => Promise.resolve({ machine: { name: 'CNC-7' },
+      shift: { id: 1 }, power: { shift_kwh: value, total_kwh: 0 } }) });
+    try {
+      screen.render(); await flush();
+      const tree = screen.render();
+      const shift = nodes(tree).find(node => node.props?.label === 'This shift');
+      const total = nodes(tree).find(node => node.props?.label === 'Total');
+      assert.equal(shift?.props.value, expected);
+      assert.equal(total?.props.value, '0');
+    } finally { screen.close(); }
+  }
 });

@@ -264,7 +264,7 @@ export function MachineDetailScreen({ route }: Props) {
                 <Stat label="Rejected" value={String(detail.quality?.rejected ?? 0)} dot={theme.colors.alarm} last />
               </Card>
               <Card style={{ flex: 1 }} title="Energy · kWh">
-                <Stat label="This shift" value={Number(detail.power?.shift_kwh ?? 0).toFixed(1)} />
+                <Stat label="This shift" value={detail.power?.shift_kwh != null ? Number(detail.power.shift_kwh).toFixed(1) : '--'} />
                 <Stat label="Total" value={detail.power?.total_kwh != null ? Number(detail.power.total_kwh).toFixed(0) : '--'} last />
               </Card>
             </View>

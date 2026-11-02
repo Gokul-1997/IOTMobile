@@ -47,8 +47,10 @@ export interface MachineDetailResponse {
     oee: number;
   };
   power: {
-    shift_kwh: number;
+    shift_kwh: number | null;
     total_kwh: number | null;
+    energy_complete?: boolean;
+    rejected_intervals?: number;
   };
   live: {
     machine_status: string;
