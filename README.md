@@ -52,3 +52,6 @@ npm start
 The API is configured through `EXPO_PUBLIC_API_BASE_URL` for builds or
 `expo.extra.apiBaseUrl` in `app.json` for local development. The Expo web preview
 uses localStorage for development fixtures; installed native apps use SecureStore.
+
+For the S&T Android publishing accounts, testing, and upload steps, see the
+[Android release guide](docs/ANDROID_RELEASE.md).

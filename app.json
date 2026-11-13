@@ -9,7 +9,7 @@
     "scheme": "mexamonitor",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.dharstec.mexamonitor",
+      "bundleIdentifier": "com.stmcnc.mexa",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -82,7 +82,7 @@
       }
     },
     "android": {
-      "package": "com.dharstec.mexamonitor",
+      "package": "com.stmcnc.mexa",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
