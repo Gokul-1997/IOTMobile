@@ -83,6 +83,7 @@
     },
     "android": {
       "package": "com.stmcnc.mexa",
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",

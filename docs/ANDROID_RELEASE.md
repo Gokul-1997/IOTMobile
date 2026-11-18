@@ -6,20 +6,50 @@
 | Build and signing contact | `it@stmcnc.com` |
 | App name | STM MEXA |
 | Android package | `com.stmcnc.mexa` |
-| First release | `1.0.0` (version code `1`) |
+| Initial app version (`versionName`) | `1.0.0` |
+| Current Android build (`versionCode`) | `2` |
 | API | `https://stmapi.stmcnc.com/api` |
 
 The two email addresses can differ. The app was built locally without a personal Expo account. The signed files are in `release-artifacts/stm-mexa-android` beside the `MobileApp` folder:
 
-- `STM-MEXA-1.0.0-1-STMCNC.apk`: install directly on an Android test phone.
-- `STM-MEXA-1.0.0-1-STMCNC.aab`: upload for the new Play Store listing.
+- `STM-MEXA-1.0.0-2-STMCNC.apk`: install directly on an Android test phone.
+- `STM-MEXA-1.0.0-2-STMCNC.aab`: upload for the new Play Store listing.
 
-Use the files with the `STMCNC` suffix. Earlier files without this suffix are
-superseded and must not be uploaded for this STM package. The app's displayed
+Use the current build `2` files with the `STMCNC` suffix. Earlier build `1` files
+and files without this suffix are superseded for new uploads. The app's displayed
 name is **STM MEXA** and its package is **`com.stmcnc.mexa`**. Only upload the AAB
 to a Play Console app registered with that exact package.
 
-Both files were verified against the same upload certificate. The APK targets Android API 36, supports API 24 and later, and passed the 16 KB native library alignment check. The two files include the same JavaScript bundle and production API address. Physical phone testing is the next check.
+Before upload, verify that both files use the existing company upload certificate,
+report `versionName` `1.0.0` and `versionCode` `2`, and include the same JavaScript
+bundle and production API address. Confirm Android API 36 targeting, API 24 or
+later support, and 16 KB native library alignment. Then complete physical phone
+testing.
+
+## Version codes and existing uploads
+
+`1.0.0` is the initial app version shown to users. Build `2` is its Android upload
+number; it does not make this app version `2.0.0`. Play has already used build code
+`1`, so uploading another file with code `1` is rejected, even if its filename or
+release name changes. Every new upload needs an unused, higher
+`android.versionCode`; keep `expo.version` at `1.0.0` for this initial app release.
+See [Android versioning](https://developer.android.com/studio/publish/versioning)
+and the [Expo 57 app configuration reference](https://docs.expo.dev/versions/v57.0.0/config/app/).
+
+If the intended build is already uploaded to this Play Console app, choose
+**Add from library** in the destination track's release and select that build.
+This reuses the same uploaded build across testing and production tracks without
+uploading the file again. If a new binary is needed, rebuild with a higher version
+code and upload that new AAB. See [Google's release guide](https://support.google.com/googleplay/android-developer/answer/9859348).
+
+For these local builds, `app.json` holds the explicit Android build number and
+`eas.json` uses `cli.appVersionSource: "local"`. Regenerate or synchronize the
+native project from this configuration and check the actual signed files before
+release. The paired APK and AAB are built together with the same code. The EAS
+production profile still has `autoIncrement: true`, which advances the local build
+number when that profile is used; preserve the updated value in source control.
+Do not run separate auto-incrementing production builds when the APK and AAB must
+have matching version codes. See [Expo's version management guide](https://docs.expo.dev/build-reference/app-versions/).
 
 ## 1. Test the APK
 

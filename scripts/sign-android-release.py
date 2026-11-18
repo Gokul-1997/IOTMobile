@@ -66,6 +66,61 @@ def native_alignment(apk):
     return {"checked_64bit_libraries": len(checked), "passed": bool(checked) and not failures, "failures": failures}
 
 
+def protobuf_fields(data):
+    """Read fields needed from AAPT2's protobuf XML manifest without extra tools."""
+    offset = 0
+
+    def varint():
+        nonlocal offset
+        value = 0
+        for shift in range(0, 64, 7):
+            if offset >= len(data):
+                raise RuntimeError("AAB manifest has a truncated protobuf value")
+            byte = data[offset]
+            offset += 1
+            value |= (byte & 127) << shift
+            if byte < 128:
+                return value
+        raise RuntimeError("AAB manifest has an invalid protobuf value")
+
+    while offset < len(data):
+        key = varint()
+        number, wire = key >> 3, key & 7
+        if not number:
+            raise RuntimeError("AAB manifest has an invalid protobuf field")
+        if wire == 0:
+            value = varint()
+        elif wire in (1, 2, 5):
+            length = varint() if wire == 2 else (8 if wire == 1 else 4)
+            if offset + length > len(data):
+                raise RuntimeError("AAB manifest has a truncated protobuf field")
+            value = data[offset:offset + length]
+            offset += length
+        else:
+            raise RuntimeError("AAB manifest has an unsupported protobuf field")
+        yield number, value
+
+
+def aab_identity(aab):
+    # AAPT2 Resources.proto: XmlNode.element=1; XmlElement.attribute=4;
+    # XmlAttribute namespace/name/raw value=1/2/3.
+    # https://android.googlesource.com/platform/frameworks/base/+/refs/heads/main/tools/aapt2/Resources.proto
+    with zipfile.ZipFile(aab) as archive:
+        node = dict(protobuf_fields(archive.read("base/manifest/AndroidManifest.xml")))
+    element = list(protobuf_fields(node[1]))
+    if dict(element).get(3) != b"manifest":
+        raise RuntimeError("AAB XML root is not an Android manifest")
+    attributes = {}
+    for number, value in element:
+        if number == 4:
+            attribute = dict(protobuf_fields(value))
+            key = (attribute.get(1, b"").decode(), attribute[2].decode())
+            attributes[key] = attribute.get(3, b"").decode()
+    android = "http://schemas.android.com/apk/res/android"
+    return (attributes.get(("", "package")), attributes.get((android, "versionCode")),
+            attributes.get((android, "versionName")))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--credentials", type=Path, required=True)
@@ -86,7 +141,10 @@ def main():
         raise RuntimeError("Protect the private credentials file with owner-only permissions (chmod 600)")
     key_file = Path(config["keystore"]).resolve(strict=True)
     project = Path(__file__).resolve().parents[1]
-    expected = json.loads((project / "app.json").read_text())["expo"]["android"]["package"]
+    app = json.loads((project / "app.json").read_text())["expo"]
+    expected = app["android"]["package"]
+    expected_code = str(app["android"].get("versionCode", 1))
+    expected_version = app["version"]
     env = os.environ.copy()
     env.update(STM_STORE_PASSWORD=config["storePassword"], STM_KEY_PASSWORD=config["keyPassword"])
     java_home = args.java_home or Path(env.get("JAVA_HOME", "/Applications/Android Studio.app/Contents/jbr/Contents/Home"))
@@ -106,6 +164,10 @@ def main():
     if not match or match[1] != expected:
         raise RuntimeError("APK package does not match the configured new STM MEXA application")
     package, code, version = match.groups()
+    if (code, version) != (expected_code, expected_version):
+        raise RuntimeError(f"APK version {version} ({code}) does not match app.json {expected_version} ({expected_code}); run Expo prebuild and rebuild both release artifacts")
+    if aab_identity(args.aab) != (package, code, version):
+        raise RuntimeError("AAB package or version does not match the APK; rebuild both release artifacts together")
     certificate = run([keytool, "-exportcert", "-rfc", "-keystore", key_file, "-alias", config["alias"], "-storepass:env", "STM_STORE_PASSWORD"], env)
     fingerprint = certificate_hash(certificate)
     args.out_dir.mkdir(parents=True, exist_ok=True)
