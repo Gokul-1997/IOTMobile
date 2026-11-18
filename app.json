@@ -83,7 +83,7 @@
     },
     "android": {
       "package": "com.stmcnc.mexa",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -101,6 +101,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "./plugins/withOptionalPortraitFeature.cjs",
       [
         "expo-secure-store",
         {
