@@ -5,15 +5,20 @@ team `LXXRDP97B2` (S AND T ENGINEERS PRIVATE LIMITED). Its first iOS version is
 `1.0.0`, build `1`. Android remains at version code `3`.
 
 Build locally with Xcode; no Expo account or cloud source upload is required.
-Expo SDK 57 requires Xcode 26.4 or later. This Mac has Xcode 26.5, the iOS 26.5
-SDK, Node 22.13.0, and CocoaPods 1.16.2.
-
-Use an Xcode version supported by the host macOS. This Mac currently runs
-macOS 27.0.1, and Launch Services refuses to open the installed Xcode 26.5
-(`-10664`). Although the command-line compilation checks below succeeded,
-Apple supports Xcode 26.5 on macOS 26.x only. Install a stable Xcode 27 release
-before completing company account setup and distribution on this Mac. See
+Expo SDK 57 requires Xcode 26.4 or later. This Mac now has Xcode 27.2
+(`27B52`) on macOS 27.0.1, with Node 22.13.0 and CocoaPods 1.16.2.
+Xcode 27.2 supports this host macOS; see
 [Apple's compatibility table](https://developer.apple.com/xcode/system-requirements).
+
+After installing Xcode, open it and complete Apple's license review and any
+first-launch component installation. Before running the build commands below,
+`xcodebuild -license check` and `xcodebuild -checkFirstLaunchStatus` must both
+return exit status `0`. Accept agreements only after the authorized user has
+reviewed and agreed to them.
+The existing simulator captures and unsigned compilation archive were made
+with Xcode 26.5 and the iOS 26.5 SDK. Use the updated toolchain for the
+company-signed device archive and distribution; installing Xcode alone does
+not complete company signing or upload.
 
 ## Privacy manifest and store label
 
