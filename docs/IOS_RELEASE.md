@@ -99,6 +99,10 @@ pending.
 
 An authorized company developer must select the company team under the app
 target's **Signing & Capabilities** and resolve the missing signing assets.
+If Xcode reports `No Account for Team "LXXRDP97B2"`, complete the company
+Apple ID sign-in under **Xcode → Settings → Accounts** and confirm that the
+S&T team appears. A signed-in App Store Connect browser session does not
+establish Xcode's signing session.
 After those assets are configured locally, run this command from `MobileApp`
 to create the signed Release archive with the production API explicitly set:
 
