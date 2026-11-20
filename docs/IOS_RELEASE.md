@@ -8,6 +8,13 @@ Build locally with Xcode; no Expo account or cloud source upload is required.
 Expo SDK 57 requires Xcode 26.4 or later. This Mac has Xcode 26.5, the iOS 26.5
 SDK, Node 22.13.0, and CocoaPods 1.16.2.
 
+Use an Xcode version supported by the host macOS. This Mac currently runs
+macOS 27.0.1, and Launch Services refuses to open the installed Xcode 26.5
+(`-10664`). Although the command-line compilation checks below succeeded,
+Apple supports Xcode 26.5 on macOS 26.x only. Install a stable Xcode 27 release
+before completing company account setup and distribution on this Mac. See
+[Apple's compatibility table](https://developer.apple.com/xcode/system-requirements).
+
 ## Privacy manifest and store label
 
 The company confirmed that its published Apple privacy label accurately covers
