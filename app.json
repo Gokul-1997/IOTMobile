@@ -10,6 +10,8 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.stmcnc.mexa",
+      "appleTeamId": "LXXRDP97B2",
+      "buildNumber": "1",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -72,6 +74,30 @@
           },
           {
             "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeOtherUserContent",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeCustomerSupport",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeProductInteraction",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeOtherDataTypes",
             "NSPrivacyCollectedDataTypeLinked": true,
             "NSPrivacyCollectedDataTypeTracking": false,
             "NSPrivacyCollectedDataTypePurposes": [
