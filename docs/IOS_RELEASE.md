@@ -15,10 +15,36 @@ first-launch component installation. Before running the build commands below,
 `xcodebuild -license check` and `xcodebuild -checkFirstLaunchStatus` must both
 return exit status `0`. Accept agreements only after the authorized user has
 reviewed and agreed to them.
-The existing simulator captures and unsigned compilation archive were made
-with Xcode 26.5 and the iOS 26.5 SDK. Use the updated toolchain for the
-company-signed device archive and distribution; installing Xcode alone does
-not complete company signing or upload.
+Use the updated toolchain for the company-signed device archive and
+distribution. Installing Xcode alone does not complete company signing or
+upload.
+
+## iOS 27 scene lifecycle
+
+Expo SDK 57 keeps its legacy application lifecycle by default. Builds using
+the iOS 27 SDK require UIKit scene support, so `app.json` enables
+`expo-build-properties` with `ios.enableSceneSupport: true`. Keep this option
+while using SDK 57 with Xcode 27. The installed Expo patch must be at least
+57.0.23 and the build-properties plugin must include scene support.
+
+Run the iOS prebuild below after installing dependencies. For the standard SDK
+57 template, the plugin makes `AppDelegate` conform to
+`ExpoReactNativeFactoryProvider`, moves React Native startup into Expo's scene
+delegate, and writes a `UIApplicationSceneManifest` pointing to
+`EXExpoAppSceneDelegate`. SDK 57 uses that built-in delegate and does not need a
+generated `SceneDelegate.swift` file. Do not keep the legacy window/startup
+block alongside the scene lifecycle.
+
+Verify those generated settings, rebuild the device and simulator apps, and
+test launch and sign-in on iOS 27 before distribution. Earlier compilation
+archives created before this option was enabled must be rebuilt. Scene-enabled
+native builds were verified on 20 November 2026: the app rendered its sign-in
+screen on iOS 27.2 and restored an authenticated session with live machine data
+on iOS 18.6. The device archive passed the scene, metadata, production API,
+privacy, and matching debug-symbol checks. Company signing remains pending.
+
+See [Expo's SDK 57 scene requirement](https://expo.dev/changelog/sdk-57#building-with-xcode-27-and-the-ios-27-sdk)
+and [SDK 57 migration details](https://github.com/expo/fyi/blob/main/ios-scene-lifecycle.md#staying-on-sdk-57-with-xcode-27).
 
 ## Privacy manifest and store label
 
@@ -66,13 +92,13 @@ mkdir -p ../release-artifacts/stm-mexa-ios
 xcodebuild -workspace ios/STMMEXA.xcworkspace -scheme STMMEXA \
   -configuration Release -sdk iphonesimulator \
   -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath ../release-artifacts/stm-mexa-ios/DerivedData \
+  -derivedDataPath ../release-artifacts/stm-mexa-ios/DerivedData-Xcode27 \
   ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=YES \
   CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO build
 ```
 
 The app is written to
-`../release-artifacts/stm-mexa-ios/DerivedData/Build/Products/Release-iphonesimulator/STMMEXA.app`.
+`../release-artifacts/stm-mexa-ios/DerivedData-Xcode27/Build/Products/Release-iphonesimulator/STMMEXA.app`.
 Keep simulator signing enabled with the local ad hoc identity (`-`). Xcode
 embeds the app's simulated `application-identifier` entitlement, which its
 secure token storage needs. Disabling signing is suitable for a compilation
@@ -96,10 +122,24 @@ export EXPO_NO_TELEMETRY=1
 xcodebuild -workspace ios/STMMEXA.xcworkspace -scheme STMMEXA \
   -configuration Release -sdk iphoneos \
   -destination 'generic/platform=iOS' \
-  -derivedDataPath ../release-artifacts/stm-mexa-ios/DerivedData \
-  -archivePath ../release-artifacts/stm-mexa-ios/STM-MEXA-1.0.0-1-unsigned.xcarchive \
+  -jobs 2 \
+  -derivedDataPath ../release-artifacts/stm-mexa-ios/DerivedData-Xcode27 \
+  -archivePath ../release-artifacts/stm-mexa-ios/STM-MEXA-1.0.0-1-Xcode27-scenes-unsigned.xcarchive \
   CODE_SIGNING_ALLOWED=NO archive
 ```
+
+## Release debug symbols
+
+React Native 0.86.3 publishes separate Release debug symbols for React,
+ReactNativeDependencies, and Hermes V1 250829098.0.17. Obtain the matching
+packages from the [official release](https://github.com/react/react-native/releases/tag/v0.86.3).
+Compare each framework and symbol bundle with `dwarfdump --uuid` before placing
+the matching `.framework.dSYM` in the archive's `dSYMs` directory. Preserve the
+main app's generated dSYM. Never substitute symbols from another binary.
+
+The current scene-enabled verification archive includes all three matching
+official symbol bundles. The local `vendor-symbols/symbol-verification.json`
+under `../release-artifacts/stm-mexa-ios` records their URLs, checksums, and UUIDs.
 
 ## Company signing and upload
 
@@ -123,7 +163,8 @@ EXPO_PUBLIC_API_BASE_URL=https://stmapi.stmcnc.com/api EXPO_NO_TELEMETRY=1 \
 xcodebuild -workspace ios/STMMEXA.xcworkspace -scheme STMMEXA \
   -configuration Release -sdk iphoneos \
   -destination 'generic/platform=iOS' \
-  -derivedDataPath ../release-artifacts/stm-mexa-ios/DerivedData \
+  -jobs 2 \
+  -derivedDataPath ../release-artifacts/stm-mexa-ios/DerivedData-Xcode27 \
   -archivePath ../release-artifacts/stm-mexa-ios/STM-MEXA-1.0.0-1-company.xcarchive \
   DEVELOPMENT_TEAM=LXXRDP97B2 CODE_SIGN_STYLE=Automatic archive
 ```
